@@ -147,19 +147,7 @@ typedef union rgba
 				u32 col;
 		};
 
-		//auto operator<=>( const rgba& ) const = default;
-
-		/*friend rgba
-	operator+( const rgba& lhs, const rgba& rhs )
-	{
-		return { u8( lhs.r + rhs.r ), u8( lhs.g + rhs.g ), u8( lhs.b + rhs.b ), u8( lhs.a + rhs.a ) };
-	}
-
-	friend rgba
-	operator/( const rgba& lhs, const size_t& rhs )
-	{
-		return { u8( lhs.r / rhs ), u8( lhs.g / rhs ), u8( lhs.b / rhs ), u8( lhs.a / rhs ) };
-	}*/
+		auto operator<=>( const rgba& ) const = default;
 
 		rgba( const u8& r, const u8& g, const u8& b, const u8& a ) :
 				r{ r }, g{ g }, b{ b }, a{ a } {}
@@ -242,12 +230,8 @@ fn ren_fill( ref( rgba ) c = {} )
 
 fn ren_text( ref( int ) x = 0, ref( int ) y = 0, ref( str ) text = "" )
 {
-	//stringRGBA( ren_current, x, Y += 32, "test", rgba_current.r, rgba_current.g, rgba_current.b, rgba_current.a );
-
 	int X = x;
 	int Y = y;
-
-	//while( *curchar && !result )
 
 	for( u8 c: text )
 	{
@@ -255,7 +239,6 @@ fn ren_text( ref( int ) x = 0, ref( int ) y = 0, ref( str ) text = "" )
 		{
 			default: break;
 
-			//case '\n':
 			case('\n')
 			{
 				X = x;
@@ -270,8 +253,6 @@ fn ren_text( ref( int ) x = 0, ref( int ) y = 0, ref( str ) text = "" )
 			}
 		}
 		characterRGBA( ren_current, X += 8, Y, c, rgba_current.r, rgba_current.g, rgba_current.b, rgba_current.a );
-		//SDLTest_DrawString(ren_current,X,Y,text.c_str());
-		//X += FONT_CHARACTER_SIZE;
 	}
 }
 
@@ -330,9 +311,8 @@ global void ( *draw_fnptr )() = null;
 	global void draw_fn()
 
 fn main_input() {
-
 	int get_mouse_x, get_mouse_y;
-SDL_GetGlobalMouseState( &get_mouse_x, &get_mouse_y );
+	SDL_GetGlobalMouseState( &get_mouse_x, &get_mouse_y );
 
 	MOUSE_X_PREV = MOUSE_X;
 	MOUSE_Y_PREV = MOUSE_Y;
@@ -392,17 +372,8 @@ SDL_GetGlobalMouseState( &get_mouse_x, &get_mouse_y );
 
 			case SDL_MOUSEWHEEL:
 				{
-					//MOUSE_WHEEL_V = s8( floor( abs( EVENT.wheel.preciseY ) + .5 ) * sign( EVENT.wheel.preciseY ) );
-					//MOUSE_WHEEL_H = s8( floor( abs( EVENT.wheel.preciseX ) + .5 ) * sign( EVENT.wheel.preciseX ) );
-				}
-				break;
-
-			case SDL_MOUSEBUTTONUP:
-				{
-					if( in_m < 16 )
-					{
-						//MOUSE[ in_m ] = 0;
-					}
+					MOUSE_WHEEL_H = s8( EVENT.wheel.x );
+					MOUSE_WHEEL_V = s8( EVENT.wheel.y );
 				}
 				break;
 		}
