@@ -1,8 +1,14 @@
-# hept
+# ***hept***
 *the* ***hept*** *abstraction is a minimal lightweight layer above C++ and SDL*
 
-### example use:
+### dependencies:
+```
+- SDL2
+- C++17 or above
+- GLM
+```
 
+### example use:
 ```C++
 #include "hept.h"
 
@@ -41,4 +47,11 @@ main()
 	//
 	print( oPlayer.pos.x, " ", oPlayer.pos.y );
 }
+```
+
+## abstraction
+*hept focuses on a concise syntax and function-naming scheme*
+### types:
+```
+
 ```
