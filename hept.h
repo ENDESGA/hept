@@ -63,6 +63,7 @@ using namespace glm;
 
 #define global inline static
 #define null nullptr
+#define obj struct
 
 #define _PRINT( x ) << x
 #define print( ... ) std::cout __VA_OPT__( EACH( _PRINT, __VA_ARGS__ ) ) << std::endl
@@ -281,6 +282,14 @@ fn quit()
 	SDL_Quit();
 	exit(0);
 }
+
+//
+
+obj obj_default
+{
+	virtual void step() {}
+	virtual void draw() {}
+};
 
 //
 
