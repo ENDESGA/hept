@@ -1,8 +1,14 @@
-# hept
+# ***hept***
 *the* ***hept*** *abstraction is a minimal lightweight layer above C++ and SDL*
 
-### example use:
+### dependencies:
+```
+- SDL2
+- C++17 or above
+- GLM
+```
 
+### example use:
 ```C++
 #include "hept.h"
 
@@ -21,19 +27,31 @@ obj entity : obj_default
 obj player : entity
 {
 	float variable = 1;
-	
+
 	player() // upon creation
 	{
-		vel = vec2(5,-1);
+		vel = vec2( 5, -1 );
 	}
 } // global objects:
 oPlayer;
+
+draw()
+{
+	ren_fill( rgba{ 255, 0, 64, 255 } );
+}
 
 main()
 {
 	oPlayer.pos = vec2( 2, 8 );
 	oPlayer.step();
 	//
-	print( oPlayer.pos.x, " ",oPlayer.pos.y );
+	print( oPlayer.pos.x, " ", oPlayer.pos.y );
 }
+```
+
+## abstraction
+*hept focuses on a concise syntax and function-naming scheme*
+### types:
+```
+
 ```
