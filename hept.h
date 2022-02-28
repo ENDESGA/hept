@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -10,6 +12,8 @@
 #include <SDL2/SDL_image.h>
 
 #include <glm/glm.hpp>
+
+#include <GL/glew.h>
 
 using namespace glm;
 
@@ -88,12 +92,12 @@ using namespace glm;
 #define case( ... ) EACH( _CASE, __VA_ARGS__ )
 
 //
-
+/*
 using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
-
+*/
 using s8 = int8_t;
 using s16 = int16_t;
 using s32 = int32_t;
@@ -117,6 +121,36 @@ using timer = std::chrono::system_clock::time_point;
 #define TIMER_END ( timer_get( TIMER_TICK ) / 1000000.00 )
 
 //
+
+template<typename T>
+fn constexpr mix( const T& a, const T& b, const T& s )
+{
+	return ( ( 1 - s ) * a + s * b );
+}
+
+template<typename T>
+fn constexpr mixinv( const T& a, const T& b, const T& v )
+{
+	return ( ( v - a ) / ( b - a ) );
+}
+
+template<typename T>
+fn constexpr mixex( const T& a, const T& b, const T& s )
+{
+	return ( pow( a, 1 - s ) * pow( b, s ) );
+}
+
+template<typename T>
+fn constexpr mixinvex( const T& a, const T& b, const T& s )
+{
+	return ( log( a / s ) / log( a / b ) );
+}
+
+template<typename T>
+fn constexpr remap( const T& a1, const T& b1, const T& a2, const T& b2, const T& v )
+{
+	return ( mix( a2, b2, mixinv( a1, b1, v ) ) );
+}
 
 template<typename T>
 fn constexpr abs( const T& v )
@@ -194,6 +228,8 @@ global s8 MOUSE_WHEEL_V = 0, MOUSE_WHEEL_H = 0;
 global list<u32> KEY( 256, 0 );
 global list<u8> KEY_LIST;
 
+global const char* comp_src;
+
 //
 
 #define file_create_in( p, f ) std::ifstream f( p, std::ios::in | std::ios::binary )
@@ -212,6 +248,13 @@ void file_write( const std::filesystem::path& p, const str& s )
 {
 	file_create_out( p, f );
 	f.write( s.data(), (long)s.size() );
+}
+
+str file_load( str const& file )
+{
+	using it = std::istreambuf_iterator<char>;
+	std::ifstream in( file );
+	return { it( in.rdbuf() ), it() };
 }
 
 //
@@ -289,11 +332,27 @@ fn main_init( ref( str ) name = "hept", ref( u16 ) w = 640, ref( u16 ) h = 360 )
 	SDL_SetHint( SDL_HINT_RENDER_VSYNC, "1" );
 
 	//
+/*
+	SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 1 );
+	SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 1 );
+	SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 1 );
+	SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE, 0 );
+	SDL_GL_SetAttribute( SDL_GL_BUFFER_SIZE, 0 );
+	
+	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 4 );
+	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 6 );
+	SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
+	
+	SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, 1 );
+	SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 0 );
+	SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );*/
+
+	//
 
 	win_w = w;
 	win_h = h;
 
-	win_current = SDL_CreateWindow( name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN );
+	win_current = SDL_CreateWindow( name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN );
 
 	ren_current = SDL_CreateRenderer( win_current, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_TARGETTEXTURE | SDL_RENDERER_ACCELERATED );
 	SDL_SetRenderDrawBlendMode( ren_current, SDL_BLENDMODE_BLEND );
@@ -302,6 +361,113 @@ fn main_init( ref( str ) name = "hept", ref( u16 ) w = 640, ref( u16 ) h = 360 )
 	tex_current = SDL_CreateTexture( ren_current, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, win_w, win_h );
 	SDL_SetTextureBlendMode( tex_current, SDL_BLENDMODE_BLEND );
 	SDL_SetRenderTarget( ren_current, tex_current );
+
+	//
+	
+	SDL_GL_CreateContext( win_current );
+	SDL_GL_SetSwapInterval( 0 );
+	glewExperimental = GL_TRUE;
+	glewInit();
+	glViewport( 0, 0, win_w, win_h );
+
+	GLuint tex;
+	glCreateTextures( GL_TEXTURE_2D, 1, &tex );
+	glTextureParameteri( tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+	glTextureParameteri( tex, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTextureParameteri( tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	glTextureParameteri( tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	glTextureStorage2D( tex, 1, GL_RGBA8, win_w, win_h );
+	std::vector<rgba> pixels, pixels2;
+	for( u32 y = 0; y < win_h; y++ )
+	{
+	for( u32 x = 0; x < win_w; x++ )
+	{
+		pixels2.emplace_back(255,255,64,255 );//rgba{ u8( rand() ), u8( rand() ), u8( rand() ), 255 } );
+	}
+	}
+	
+	//pixels[7 + (7 * W)] = rgba{255,255,255,255};
+	
+	const void* pixels_ptr = pixels.data();
+	glTextureSubImage2D( tex, 0, 0, 0, win_w, win_h, GL_RGBA, GL_UNSIGNED_BYTE, &(pixels2)[0] );
+	glBindImageTexture( 0, tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8UI );
+	glBindTextureUnit( 0, tex );
+
+for( u32 y = 0; y < win_h; y++ )
+	{
+	for( u32 x = 0; x < win_w; x++ )
+	{
+		pixels.emplace_back();
+	}
+	}
+
+//
+
+GLuint sh_comp = glCreateShader( GL_COMPUTE_SHADER );
+str comp_src_load = file_load("comp.glsl");
+comp_src = comp_src_load.c_str();
+
+print(comp_src);
+
+	glShaderSource( sh_comp, 1, &comp_src, null );
+	glCompileShader( sh_comp );
+
+int sh_compn = 1000;
+	char sh_comp_text[ 1000 ];
+	glGetShaderInfoLog( sh_comp, 1000, &sh_compn, sh_comp_text );
+	print( sh_comp_text );
+
+	GLint sh_comp_status;
+	glGetShaderiv( sh_comp, GL_COMPILE_STATUS, &sh_comp_status );
+	if( sh_comp_status == GL_FALSE ) { quit(); }
+
+GLuint prog_comp = glCreateProgram();
+	glAttachShader( prog_comp, sh_comp );
+	glLinkProgram( prog_comp );
+
+glUseProgram( prog_comp );
+		glUniform1f( glGetUniformLocation( prog_comp, "in_uni" ), 7. );
+		glUniform1i( glGetUniformLocation( prog_comp, "in_frame" ), 7 );
+		glDispatchCompute( ceil( win_w / 32. ), ceil( win_h / 32. ), 1. );
+		glMemoryBarrier( GL_ALL_BARRIER_BITS );
+
+//
+
+auto * data = new unsigned char[(win_w * win_h) * 4];
+	glGetTextureImage(tex,0,GL_RGBA,GL_UNSIGNED_BYTE,win_w * win_h * 4,&(data)[0]);
+
+SDL_UpdateTexture(tex_current,null,&(data)[0],win_w * 4);
+
+///////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+GLenum err( glGetError() );
+while( err != GL_NO_ERROR )
+	{
+		switch( err )
+		{
+			case GL_INVALID_OPERATION:
+				print( "INVALID_OPERATION" );
+				break;
+			case GL_INVALID_ENUM:
+				print( "INVALID_ENUM" );
+				break;
+			case GL_INVALID_VALUE:
+				print( "INVALID_VALUE" );
+				break;
+			case GL_OUT_OF_MEMORY:
+				print( "OUT_OF_MEMORY" );
+				break;
+			case GL_INVALID_FRAMEBUFFER_OPERATION:
+				print( "INVALID_FRAMEBUFFER_OPERATION" );
+				break;
+		}
+		err = glGetError();
+	}
+
+	print( glGetError() );
+	print( glewGetErrorString( glGetError() ) );
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////
 }
 
 global void ( *draw_fnptr )() = null;
@@ -310,7 +476,8 @@ global void ( *draw_fnptr )() = null;
 	auto _draw_fn_set = [] {draw_fnptr = &draw_fn; return null; }(); \
 	global void draw_fn()
 
-fn main_input() {
+fn main_input()
+{
 	int get_mouse_x, get_mouse_y;
 	SDL_GetGlobalMouseState( &get_mouse_x, &get_mouse_y );
 
@@ -327,17 +494,20 @@ fn main_input() {
 	MOUSE_WHEEL_V = 0;
 	MOUSE_WHEEL_H = 0;
 
-	iter( k, KEY_LIST ) {
+	iter( k, KEY_LIST )
+	{
 		KEY[ k ]++;
 	}
 
 	SDL_Event EVENT{};
-	while( SDL_PollEvent( &EVENT ) ) {
+	while( SDL_PollEvent( &EVENT ) )
+	{
 		const auto& in_k = u32( EVENT.key.keysym.scancode );
 		const auto& in_m = u32( EVENT.button.button );
 		const bool win_close = ( EVENT.window.event == SDL_WINDOWEVENT_CLOSE );
 
-		switch( EVENT.type ) {
+		switch( EVENT.type )
+		{
 			case SDL_WINDOWEVENT:
 				{
 					if( win_close ) quit();

@@ -48,7 +48,7 @@ ContinuationIndentWidth: 2
 IndentCaseLabels: true
 IndentPPDirectives: BeforeHash
 IndentWidth: 2
-IndentWrappedFunctionNames: false
+IndentWrappedFunctionNames: true
 IndentCaseBlocks: true
 IndentRequires: true
 IndentGotoLabels: true
