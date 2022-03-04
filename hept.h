@@ -91,7 +91,6 @@ using namespace glm;
 #define _CASE( x ) case x:
 #define case( ... ) EACH( _CASE, __VA_ARGS__ )
 
-//
 /*
 using u8 = uint8_t;
 using u16 = uint16_t;
@@ -123,25 +122,25 @@ using timer = std::chrono::system_clock::time_point;
 //
 
 template<typename T>
-fn constexpr mix( const T& a, const T& b, const T& s )
+fn constexpr lerp( const T& a, const T& b, const T& s )
 {
 	return ( ( 1 - s ) * a + s * b );
 }
 
 template<typename T>
-fn constexpr mixinv( const T& a, const T& b, const T& v )
+fn constexpr lerpinv( const T& a, const T& b, const T& v )
 {
 	return ( ( v - a ) / ( b - a ) );
 }
 
 template<typename T>
-fn constexpr mixex( const T& a, const T& b, const T& s )
+fn constexpr lerpex( const T& a, const T& b, const T& s )
 {
 	return ( pow( a, 1 - s ) * pow( b, s ) );
 }
 
 template<typename T>
-fn constexpr mixinvex( const T& a, const T& b, const T& s )
+fn constexpr lerpinvex( const T& a, const T& b, const T& s )
 {
 	return ( log( a / s ) / log( a / b ) );
 }
@@ -149,7 +148,7 @@ fn constexpr mixinvex( const T& a, const T& b, const T& s )
 template<typename T>
 fn constexpr remap( const T& a1, const T& b1, const T& a2, const T& b2, const T& v )
 {
-	return ( mix( a2, b2, mixinv( a1, b1, v ) ) );
+	return ( lerp( a2, b2, lerpinv( a1, b1, v ) ) );
 }
 
 template<typename T>
@@ -208,8 +207,8 @@ struct quad
 //
 
 global winptr win_current = null;
-global renptr ren_current = null;
-global texptr tex_current = null;
+//global renptr ren_current = null;
+//global texptr tex_current = null;
 
 global u16 win_x = 0;
 global u16 win_y = 0;
@@ -228,7 +227,10 @@ global s8 MOUSE_WHEEL_V = 0, MOUSE_WHEEL_H = 0;
 global list<u32> KEY( 256, 0 );
 global list<u8> KEY_LIST;
 
+global GLuint prog_comp;
 global const char* comp_src;
+global GLuint comp_tex;
+global list<rgba> comp_data;
 
 //
 
@@ -257,18 +259,265 @@ str file_load( str const& file )
 	return { it( in.rdbuf() ), it() };
 }
 
+// GL
+
+#define glsl GLuint
+#define glsl_vert GL_VERTEX_SHADER
+#define glsl_frag GL_FRAGMENT_SHADER
+#define glsl_comp GL_COMPUTE_SHADER
+
+#define gpu GLuint
+
+struct vert
+{
+		GLfloat x, y, u, v;
+
+		vert( GLfloat x, GLfloat y, GLfloat u, GLfloat v ) :
+				x{ x }, y{ y }, u{ u }, v{ v } {};
+};
+#define vert_list list<vert>
+
+struct vert_data
+{
+		GLuint id, size;
+
+		vert_data( GLuint id = 0, GLuint size = 0 ) :
+				id{ id }, size{ size } {};
+};
+
+#define tri_list list<GLuint>
+
+#define tex GLuint
+#define tex_id GLuint
+
+//
+
+global gpu gpu_current = 0;
+global vert_data vert_data_current;
+
+//
+
+global gpu win_gpu = 0;
+global glsl win_glsl_vert = 0;
+global glsl win_glsl_frag = 0;
+global vert_list win_verts = {
+	vert( -1., -1., 0., 1. ),
+	vert( -1., 1., 0., 0. ),
+	vert( 1., 1., 1., 0. ),
+	vert( 1., -1., 1., 1. ),
+};
+global tri_list win_tris = {
+	0, 1, 2,
+	0, 2, 3 };
+global tex win_tex = 0;
+global u16 win_tex_w = 0;
+global u16 win_tex_h = 0;
+global vert_data win_vert_data;
+
+global gpu obj_gpu = 0;
+global glsl obj_glsl_comp = 0;
+
+//
+
+global const str _glsl_comp_define = "#version 460 core\n"
+																		 "#define get imageLoad\n"
+																		 "#define set imageStore\n"
+																		 "precision lowp float;"
+																		 "const int N = int(gl_GlobalInvocationID.x);";
+
+fn _glsl_new_raw( GLenum type, const char* sc )
+{
+	glsl g = glCreateShader( type );
+
+	glShaderSource( g, 1, &sc, null );
+	glCompileShader( g );
+
+	int sc_n = 1000;
+	char sc_t[ 1000 ];
+	glGetShaderInfoLog( g, 1000, &sc_n, sc_t );
+	print( sc_t );
+
+	return g;
+}
+fn _glsl_new( GLenum type, const str& file )
+{
+	str s = file_load( file );
+
+	switch( type )
+	{
+		case( glsl_comp ) {
+			s = _glsl_comp_define + s;
+			break;
+		} default: break;
+	}
+
+	const char* sc = s.c_str();
+	return _glsl_new_raw( type, sc );
+}
+#define glsl_new( type, file ) _glsl_new( type, file )
+#define glsl_new_raw( type, src ) _glsl_new_raw( type, src )
+
+fn _gpu_new( glsl in_glsl1 = 0, glsl in_glsl2 = 0, glsl in_glsl3 = 0, glsl in_glsl4 = 0, glsl in_glsl5 = 0, glsl in_glsl6 = 0, glsl in_glsl7 = 0 )
+{
+	gpu g = glCreateProgram();
+
+	if( in_glsl1 != 0 ) glAttachShader( g, in_glsl1 );
+	if( in_glsl2 != 0 ) glAttachShader( g, in_glsl2 );
+	if( in_glsl3 != 0 ) glAttachShader( g, in_glsl3 );
+	if( in_glsl4 != 0 ) glAttachShader( g, in_glsl4 );
+	if( in_glsl5 != 0 ) glAttachShader( g, in_glsl5 );
+	if( in_glsl6 != 0 ) glAttachShader( g, in_glsl6 );
+	if( in_glsl7 != 0 ) glAttachShader( g, in_glsl7 );
+	glLinkProgram( g );
+
+	return g;
+}
+#define gpu_new( ... ) _gpu_new( __VA_ARGS__ )
+
+#define gpu_set( gpu )   \
+	do {                   \
+		glUseProgram( gpu ); \
+		gpu_current = gpu;   \
+	} while( false )
+
+#define gpu_uni_int( name, val ) glUniform1i( glGetUniformLocation( gpu_current, name ), val )
+#define gpu_uni_float( name, val ) glUniform1f( glGetUniformLocation( gpu_current, name ), val )
+
+fn gpu_print_errors()
+{
+	GLenum err( glGetError() );
+	while( err != GL_NO_ERROR )
+	{
+		switch( err )
+		{
+			default:
+			case GL_INVALID_OPERATION:
+				print( "INVALID_OPERATION" );
+				break;
+			case GL_INVALID_ENUM:
+				print( "INVALID_ENUM" );
+				break;
+			case GL_INVALID_VALUE:
+				print( "INVALID_VALUE" );
+				break;
+			case GL_OUT_OF_MEMORY:
+				print( "OUT_OF_MEMORY" );
+				break;
+			case GL_INVALID_FRAMEBUFFER_OPERATION:
+				print( "INVALID_FRAMEBUFFER_OPERATION" );
+				break;
+		}
+		err = glGetError();
+	}
+}
+
+fn _vert_data_new( const vert_list& v, const tri_list& t )
+{
+	GLuint va, vb, eb;
+	glCreateVertexArrays( 1, &va );
+	glCreateBuffers( 1, &vb );
+	glCreateBuffers( 1, &eb );
+
+	glNamedBufferData( vb, v.size() * sizeof( vert ), v.data(), GL_STATIC_DRAW );
+	glNamedBufferData( eb, t.size() * sizeof( GLuint ), t.data(), GL_STATIC_DRAW );
+
+	glEnableVertexArrayAttrib( va, 0 );
+	glVertexArrayAttribBinding( va, 0, 0 );
+	glVertexArrayAttribFormat( va, 0, 2, GL_FLOAT, GL_FALSE, 0 );
+
+	glEnableVertexArrayAttrib( va, 1 );
+	glVertexArrayAttribBinding( va, 1, 0 );
+	glVertexArrayAttribFormat( va, 1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof( GLfloat ) );
+
+	glVertexArrayVertexBuffer( va, 0, vb, 0, 4 * sizeof( GLfloat ) );
+	glVertexArrayElementBuffer( va, eb );
+
+	return vert_data{ va, GLuint( t.size() ) };
+}
+#define vert_data_new( v, t ) _vert_data_new( v, t )
+
+#define gpu_bind_vert_data( vd ) \
+	do {                           \
+		vert_data_current = vd;      \
+		glBindVertexArray( vd.id );  \
+	} while( false )
+
+#define gpu_draw_tris() glDrawElements( GL_TRIANGLES, vert_data_current.size, GL_UNSIGNED_INT, 0 )
+
+#define gpu_compute( x, y, z )                                  \
+	do {                                                          \
+		glDispatchCompute( max( 1, x ), max( 1, y ), max( 1, z ) ); \
+		glMemoryBarrier( GL_ALL_BARRIER_BITS );                     \
+	} while( false )
+
+fn _tex_new( u16 w = 1, u16 h = 1 )
+{
+	tex t;
+	glCreateTextures( GL_TEXTURE_2D, 1, &t );
+	glTextureParameteri( t, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+	glTextureParameteri( t, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTextureParameteri( t, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	glTextureParameteri( t, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	glTextureParameteri( t, GL_TEXTURE_COMPARE_MODE, GL_NONE );
+	glTextureParameteri( t, GL_TEXTURE_COMPARE_FUNC, GL_NEVER );
+	glTextureStorage2D( t, 1, GL_RGBA8, GLsizei( w ), GLsizei( h ) );
+
+	std::vector<rgba> pixels;
+	for( u32 y = 0; y < h; y++ )
+	{
+		for( u32 x = 0; x < w; x++ )
+		{
+			pixels.push_back( rgba{} );
+		}
+	}
+	glTextureSubImage2D( t, 0, 0, 0, GLsizei( w ), GLsizei( h ), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data() );
+	glBindImageTexture( 0, t, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8UI );
+	return t;
+}
+#define tex_new( ... ) _tex_new( __VA_ARGS__ )
+
+#define tex_bind( t, id )       \
+	do {                          \
+		glBindTextureUnit( id, t ); \
+	} while( false )
+
+#define tex_set( t, x, y, w, h, p ) glTextureSubImage2D( t, 0, GLint( x ), GLint( y ), GLsizei( w ), GLsizei( h ), GL_RGBA, GL_UNSIGNED_BYTE, p )
+
+//
+
+fn _win_update()
+{
+	int get_win_x, get_win_y;
+	int get_win_w, get_win_h;
+	SDL_GetWindowPosition( win_current, &get_win_x, &get_win_y );
+	SDL_GetWindowSize( win_current, &get_win_w, &get_win_h );
+	win_x = get_win_x;
+	win_y = get_win_y;
+	win_w = get_win_w;
+	win_h = get_win_h;
+}
+
+fn _dis_update()
+{
+	SDL_DisplayMode get_dis_mode;
+	SDL_GetCurrentDisplayMode( SDL_GetWindowDisplayIndex( win_current ), &get_dis_mode );
+	dis_w = get_dis_mode.w;
+	dis_h = get_dis_mode.h;
+	dis_fps = get_dis_mode.refresh_rate;
+}
+
 //
 
 fn ren_rgba( ref( rgba ) c = {} )
 {
 	rgba_current = c;
-	SDL_SetRenderDrawColor( ren_current, rgba_current.r, rgba_current.g, rgba_current.b, rgba_current.a );
+	//SDL_SetRenderDrawColor( ren_current, rgba_current.r, rgba_current.g, rgba_current.b, rgba_current.a );
 }
 
 fn ren_fill( ref( rgba ) c = {} )
 {
-	ren_rgba( c );
-	SDL_RenderClear( ren_current );
+	//ren_rgba( c );
+	//SDL_RenderClear( ren_current );
 }
 
 fn ren_text( ref( int ) x = 0, ref( int ) y = 0, ref( str ) text = "" )
@@ -295,7 +544,7 @@ fn ren_text( ref( int ) x = 0, ref( int ) y = 0, ref( str ) text = "" )
 				continue;
 			}
 		}
-		characterRGBA( ren_current, X += 8, Y, c, rgba_current.r, rgba_current.g, rgba_current.b, rgba_current.a );
+		//characterRGBA( ren_current, X += 8, Y, c, rgba_current.r, rgba_current.g, rgba_current.b, rgba_current.a );
 	}
 }
 
@@ -321,153 +570,40 @@ fn main_init( ref( str ) name = "hept", ref( u16 ) w = 640, ref( u16 ) h = 360 )
 {
 	SDL_Init( SDL_INIT_EVERYTHING );
 
-	SDL_SetHint( SDL_HINT_RENDER_BATCHING, "1" );
-	SDL_SetHint( SDL_HINT_RENDER_LINE_METHOD, "3" );
-	SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "0" );
-	SDL_SetHint( SDL_HINT_WINDOWS_DISABLE_THREAD_NAMING, "1" );
-	SDL_SetHint( SDL_HINT_FRAMEBUFFER_ACCELERATION, "opengl" );
-	SDL_SetHint( SDL_HINT_RENDER_DRIVER, "opengl" );
-	SDL_SetHint( SDL_HINT_VIDEO_WINDOW_SHARE_PIXEL_FORMAT, "1" );
-	SDL_SetHint( SDL_HINT_VIDEO_DOUBLE_BUFFER, "1" );
-	SDL_SetHint( SDL_HINT_RENDER_VSYNC, "1" );
-
 	//
-/*
-	SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 1 );
-	SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 1 );
-	SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 1 );
-	SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE, 0 );
-	SDL_GL_SetAttribute( SDL_GL_BUFFER_SIZE, 0 );
-	
-	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 4 );
-	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 6 );
-	SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
-	
-	SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, 1 );
-	SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 0 );
-	SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );*/
+	const int win_scale = 3;
+	win_tex_w = w;
+win_tex_h = h;
+
+	win_current = SDL_CreateWindow( name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_tex_w * win_scale, win_tex_h * win_scale, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN );
+
+	_win_update();
+	_dis_update();
 
 	//
 
-	win_w = w;
-	win_h = h;
-
-	win_current = SDL_CreateWindow( name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN );
-
-	ren_current = SDL_CreateRenderer( win_current, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_TARGETTEXTURE | SDL_RENDERER_ACCELERATED );
-	SDL_SetRenderDrawBlendMode( ren_current, SDL_BLENDMODE_BLEND );
-	SDL_SetRenderDrawColor( ren_current, 255, 255, 255, 255 );
-
-	tex_current = SDL_CreateTexture( ren_current, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, win_w, win_h );
-	SDL_SetTextureBlendMode( tex_current, SDL_BLENDMODE_BLEND );
-	SDL_SetRenderTarget( ren_current, tex_current );
-
-	//
-	
 	SDL_GL_CreateContext( win_current );
-	SDL_GL_SetSwapInterval( 0 );
+	SDL_GL_SetSwapInterval( -1 );
+
 	glewExperimental = GL_TRUE;
 	glewInit();
-	glViewport( 0, 0, win_w, win_h );
+	glViewport( 0, 0, win_tex_w * win_scale, win_tex_h * win_scale );
 
-	GLuint tex;
-	glCreateTextures( GL_TEXTURE_2D, 1, &tex );
-	glTextureParameteri( tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-	glTextureParameteri( tex, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-	glTextureParameteri( tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
-	glTextureParameteri( tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-	glTextureStorage2D( tex, 1, GL_RGBA8, win_w, win_h );
-	std::vector<rgba> pixels, pixels2;
-	for( u32 y = 0; y < win_h; y++ )
-	{
-	for( u32 x = 0; x < win_w; x++ )
-	{
-		pixels2.emplace_back(255,255,64,255 );//rgba{ u8( rand() ), u8( rand() ), u8( rand() ), 255 } );
-	}
-	}
-	
-	//pixels[7 + (7 * W)] = rgba{255,255,255,255};
-	
-	const void* pixels_ptr = pixels.data();
-	glTextureSubImage2D( tex, 0, 0, 0, win_w, win_h, GL_RGBA, GL_UNSIGNED_BYTE, &(pixels2)[0] );
-	glBindImageTexture( 0, tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8UI );
-	glBindTextureUnit( 0, tex );
+	// window gpu
 
-for( u32 y = 0; y < win_h; y++ )
-	{
-	for( u32 x = 0; x < win_w; x++ )
-	{
-		pixels.emplace_back();
-	}
-	}
+	win_vert_data = vert_data_new( win_verts, win_tris );
 
-//
+	win_tex = tex_new( win_tex_w, win_tex_h );
+	tex_bind(win_tex,0);
 
-GLuint sh_comp = glCreateShader( GL_COMPUTE_SHADER );
-str comp_src_load = file_load("comp.glsl");
-comp_src = comp_src_load.c_str();
+	win_glsl_vert = glsl_new( glsl_vert, "glsl/win_vert.glsl" );
+	win_glsl_frag = glsl_new( glsl_frag, "glsl/win_frag.glsl" );
+	win_gpu = gpu_new( win_glsl_vert, win_glsl_frag );
+/*
+	obj_glsl_comp = glsl_new(glsl_comp, obj_comp.glsl);
+	obj_gpu = gpu_new( obj_glsl_comp );*/
 
-print(comp_src);
-
-	glShaderSource( sh_comp, 1, &comp_src, null );
-	glCompileShader( sh_comp );
-
-int sh_compn = 1000;
-	char sh_comp_text[ 1000 ];
-	glGetShaderInfoLog( sh_comp, 1000, &sh_compn, sh_comp_text );
-	print( sh_comp_text );
-
-	GLint sh_comp_status;
-	glGetShaderiv( sh_comp, GL_COMPILE_STATUS, &sh_comp_status );
-	if( sh_comp_status == GL_FALSE ) { quit(); }
-
-GLuint prog_comp = glCreateProgram();
-	glAttachShader( prog_comp, sh_comp );
-	glLinkProgram( prog_comp );
-
-glUseProgram( prog_comp );
-		glUniform1f( glGetUniformLocation( prog_comp, "in_uni" ), 7. );
-		glUniform1i( glGetUniformLocation( prog_comp, "in_frame" ), 7 );
-		glDispatchCompute( ceil( win_w / 32. ), ceil( win_h / 32. ), 1. );
-		glMemoryBarrier( GL_ALL_BARRIER_BITS );
-
-//
-
-auto * data = new unsigned char[(win_w * win_h) * 4];
-	glGetTextureImage(tex,0,GL_RGBA,GL_UNSIGNED_BYTE,win_w * win_h * 4,&(data)[0]);
-
-SDL_UpdateTexture(tex_current,null,&(data)[0],win_w * 4);
-
-///////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-GLenum err( glGetError() );
-while( err != GL_NO_ERROR )
-	{
-		switch( err )
-		{
-			case GL_INVALID_OPERATION:
-				print( "INVALID_OPERATION" );
-				break;
-			case GL_INVALID_ENUM:
-				print( "INVALID_ENUM" );
-				break;
-			case GL_INVALID_VALUE:
-				print( "INVALID_VALUE" );
-				break;
-			case GL_OUT_OF_MEMORY:
-				print( "OUT_OF_MEMORY" );
-				break;
-			case GL_INVALID_FRAMEBUFFER_OPERATION:
-				print( "INVALID_FRAMEBUFFER_OPERATION" );
-				break;
-		}
-		err = glGetError();
-	}
-
-	print( glGetError() );
-	print( glewGetErrorString( glGetError() ) );
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////////////////////////
+	gpu_print_errors();
 }
 
 global void ( *draw_fnptr )() = null;
@@ -552,34 +688,46 @@ fn main_input()
 
 fn main_loop()
 {
+	static int main_loop_n = 0;
+	static timer TICK = timer_now();
+
+	//
+
+	std::vector<rgba> pixels;
+	for( u32 y = 0; y < win_h; y++ )
+	{
+		for( u32 x = 0; x < win_w; x++ )
+		{
+			pixels.push_back( rgba{} );
+		}
+	}
+
+	tex_set( win_tex, 0, 0, win_tex_w, win_tex_h, pixels.data() );
+
 	loop()
 	{
-		int get_win_x, get_win_y;
-		int get_win_w, get_win_h;
-		SDL_GetWindowPosition( win_current, &get_win_x, &get_win_y );
-		SDL_GetWindowSize( win_current, &get_win_w, &get_win_h );
-		win_x = get_win_x;
-		win_y = get_win_y;
-		win_w = get_win_w;
-		win_h = get_win_h;
-
-		SDL_DisplayMode get_dis_mode;
-		SDL_GetCurrentDisplayMode( SDL_GetWindowDisplayIndex( win_current ), &get_dis_mode );
-		dis_w = get_dis_mode.w;
-		dis_h = get_dis_mode.h;
-		dis_fps = get_dis_mode.refresh_rate;
+		_win_update();
+		_dis_update();
 
 		main_input();
 
 		if( KEY[ SDL_SCANCODE_ESCAPE ] > 0 ) break;
 
-		SDL_SetRenderTarget( ren_current, tex_current );
+		//
 
 		if( draw_fnptr != null ) draw_fnptr();
 
-		SDL_SetRenderTarget( ren_current, null );
-		SDL_RenderCopy( ren_current, tex_current, null, null );
-		SDL_RenderPresent( ren_current );
+		//
+
+		gpu_set( win_gpu );
+		gpu_uni_int( "in_tex", 0 );
+
+		gpu_bind_vert_data( win_vert_data );
+		gpu_draw_tris();
+
+		//
+
+		SDL_GL_SwapWindow( win_current );
 	}
 	quit();
 }

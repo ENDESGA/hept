@@ -4,4 +4,4 @@ project(hept)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(hept main.cpp hept.h)
-target_link_libraries(hept SDL2 SDL2main SDL2_image SDL2_gfx GL GLEW)
+target_link_libraries(hept SDL2 SDL2main SDL2_image GL GLEW)
