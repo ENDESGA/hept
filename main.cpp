@@ -12,5 +12,5 @@ main()
 draw()
 {
 	gpu_set( test_gpu );
-	gpu_compute( 77, 0, 0 );
+	gpu_compute( 7, 0, 0 );
 }
