@@ -1,11 +1,7 @@
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout(rgba8ui, binding = 0) uniform uimage2D in_tex;
-
-//
+tex( 0 ) in_tex;
 
 void main()
 {
-    ivec2 pos = ivec2(N);
-
-    set(in_tex, pos, ivec4(255));
+	//set(in_tex, ivec2(N,N/2), ivec4(255));
+	//set(in_tex, ivec2(N/pow((cos(T*.5)+2.),3.),N), ivec4(255));
 }

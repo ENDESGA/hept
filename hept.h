@@ -12,6 +12,7 @@
 #include <SDL2/SDL_image.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <GL/glew.h>
 
@@ -72,8 +73,8 @@ using namespace glm;
 #define _PRINT( x ) << x
 #define print( ... ) std::cout __VA_OPT__( EACH( _PRINT, __VA_ARGS__ ) ) << std::endl
 
-#define to( n, v ) for( u32 v = 0; v++ <= n; )
-#define from( n, v ) for( u32 v = n; v-- > 0; )
+#define to( v, n ) for( auto v = 0; v++ <= n; )
+#define from( n, v ) for( auto v = n; v-- > 0; )
 #define iter( n, v ) for( auto n: v )
 
 #define _IF( x ) ( x )
@@ -109,6 +110,7 @@ using renptr = SDL_Renderer*;
 using texptr = SDL_Texture*;
 
 #define list std::vector
+#define duo std::pair
 
 using timer = std::chrono::system_clock::time_point;
 
@@ -212,8 +214,8 @@ global winptr win_current = null;
 
 global u16 win_x = 0;
 global u16 win_y = 0;
-global u16 win_w = 640;
-global u16 win_h = 360;
+global u16 win_w = 1;
+global u16 win_h = 1;
 
 global u16 dis_w = 0;
 global u16 dis_h = 0;
@@ -259,6 +261,41 @@ str file_load( str const& file )
 	return { it( in.rdbuf() ), it() };
 }
 
+// rand
+
+uint _HEPT32_X = 0x77777777u, _HEPT32_Y = 0x77777777u, _HEPT32_Z = 0x77777777u;
+uint _HEPT32_X_ACCUM = 0x77777777u, _HEPT32_Y_ACCUM = 0x77777777u, _HEPT32_Z_ACCUM = 0x77777777u;
+
+fn hept32_seeded( uint x = 7, uint y = 7, uint z = 7 )
+{
+	x = ( x * _HEPT32_X ) - ( ~x * 0x77777777u ) - ~( x * _HEPT32_Y );
+	y = ( y * _HEPT32_Y ) - ( ~y * 0x77777777u ) - ~( y * _HEPT32_Z );
+	z = ( z * _HEPT32_Z ) - ( ~z * 0x77777777u ) - ~( z * _HEPT32_X );
+	z = ~( ~( ~x * y * z ) * ~( x * ~y * z ) * ~( x * y * ~z ) );
+	return z ^ ( z >> 16 );
+}
+
+fn hept32_seed( uint seed )
+{
+	// multi-layer seed expansion and extraction
+	seed = ( hept32_seeded( seed, seed, seed ) * 0x77777777u ) - 0x77777777u;
+	_HEPT32_X = ( ( hept32_seeded( 0x77777777u, seed, seed ) * seed ) - seed );
+	_HEPT32_Y = ( ( hept32_seeded( seed, 0x77777777u, seed ) * seed ) - seed );
+	_HEPT32_Z = ( ( hept32_seeded( seed, seed, 0x77777777u ) * seed ) - seed );
+
+	_HEPT32_X_ACCUM = _HEPT32_X;
+	_HEPT32_Y_ACCUM = _HEPT32_Y;
+	_HEPT32_Z_ACCUM = _HEPT32_Z;
+}
+
+fn hept32()
+{
+	return hept32_seeded( _HEPT32_X_ACCUM++, _HEPT32_Y_ACCUM++, _HEPT32_Z_ACCUM++ );
+}
+
+#define rand_seed( x ) hept32_seed( x )
+#define rand( ... ) hept32##__VA_OPT__( _seeded )( __VA_ARGS__ )
+
 // GL
 
 #define glsl GLuint
@@ -266,14 +303,16 @@ str file_load( str const& file )
 #define glsl_frag GL_FRAGMENT_SHADER
 #define glsl_comp GL_COMPUTE_SHADER
 
+#define glsl_max 1024
+
 #define gpu GLuint
 
 struct vert
 {
-		GLfloat x, y, u, v;
+		GLfloat x, y, z, u, v;
 
-		vert( GLfloat x, GLfloat y, GLfloat u, GLfloat v ) :
-				x{ x }, y{ y }, u{ u }, v{ v } {};
+		vert( GLfloat x, GLfloat y, GLfloat z, GLfloat u, GLfloat v ) :
+				x{ x }, y{ y }, z{ z }, u{ u }, v{ v } {};
 };
 #define vert_list list<vert>
 
@@ -301,10 +340,10 @@ global gpu win_gpu = 0;
 global glsl win_glsl_vert = 0;
 global glsl win_glsl_frag = 0;
 global vert_list win_verts = {
-	vert( -1., -1., 0., 1. ),
-	vert( -1., 1., 0., 0. ),
-	vert( 1., 1., 1., 0. ),
-	vert( 1., -1., 1., 1. ),
+	vert( -1., -1., 0., 0., 1. ),
+	vert( -1., 1., 0., 0., 0. ),
+	vert( 1., 1., 0., 1., 0. ),
+	vert( 1., -1., 0., 1., 1. ),
 };
 global tri_list win_tris = {
 	0, 1, 2,
@@ -319,11 +358,38 @@ global glsl obj_glsl_comp = 0;
 
 //
 
-global const str _glsl_comp_define = "#version 460 core\n"
-																		 "#define get imageLoad\n"
-																		 "#define set imageStore\n"
-																		 "precision lowp float;"
-																		 "const int N = int(gl_GlobalInvocationID.x);";
+global const str _glsl_comp_define_pre = R"(
+#version 460 core
+precision mediump float;
+precision highp int;
+)";
+
+global const str _glsl_comp_define = R"(
+) in;
+
+#define ZERO min(F,0)
+#define get imageLoad
+#define set imageStore
+#define rgba uvec4
+#define obj struct
+#define tex( id ) layout(rgba8ui, binding = id) uniform uimage2D
+#define data( id ) layout(binding = id) buffer
+#define avg( x, y ) ((x+y)/2.)
+#define to( var, n ) for( uint var = ZERO; var < n; var++ )
+#define norm normalize
+
+const ivec3 ID = ivec3(gl_GlobalInvocationID);
+const uint N = uint(
+	gl_GlobalInvocationID.x +
+	(gl_GlobalInvocationID.y * gl_WorkGroupSize.x) +
+	(gl_GlobalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y)
+);
+
+uniform float T;
+uniform uint F;
+uniform ivec2 R;
+
+)";
 
 fn _glsl_new_raw( GLenum type, const char* sc )
 {
@@ -339,14 +405,16 @@ fn _glsl_new_raw( GLenum type, const char* sc )
 
 	return g;
 }
-fn _glsl_new( GLenum type, const str& file )
+fn _glsl_new( GLenum type, const str& file, const int& size_x = 1, const int& size_y = 1, const int& size_z = 1 )
 {
-	str s = file_load( file );
+	str s = file_load( "glsl/" + file );
 
 	switch( type )
 	{
 		case( glsl_comp ) {
-			s = _glsl_comp_define + s;
+			s = _glsl_comp_define_pre + "layout(local_size_x = " + std::to_string( size_x ) +
+					", local_size_y = " + std::to_string( size_y ) +
+					", local_size_z = " + std::to_string( size_z ) + _glsl_comp_define + s;
 			break;
 		} default: break;
 	}
@@ -354,7 +422,7 @@ fn _glsl_new( GLenum type, const str& file )
 	const char* sc = s.c_str();
 	return _glsl_new_raw( type, sc );
 }
-#define glsl_new( type, file ) _glsl_new( type, file )
+#define glsl_new( type, file, ... ) _glsl_new( type, file __VA_OPT__(, __VA_ARGS__ ) )
 #define glsl_new_raw( type, src ) _glsl_new_raw( type, src )
 
 fn _gpu_new( glsl in_glsl1 = 0, glsl in_glsl2 = 0, glsl in_glsl3 = 0, glsl in_glsl4 = 0, glsl in_glsl5 = 0, glsl in_glsl6 = 0, glsl in_glsl7 = 0 )
@@ -374,14 +442,19 @@ fn _gpu_new( glsl in_glsl1 = 0, glsl in_glsl2 = 0, glsl in_glsl3 = 0, glsl in_gl
 }
 #define gpu_new( ... ) _gpu_new( __VA_ARGS__ )
 
-#define gpu_set( gpu )   \
-	do {                   \
-		glUseProgram( gpu ); \
-		gpu_current = gpu;   \
+#define gpu_set( gpu )                                   \
+	do {                                                   \
+		glUseProgram( gpu );                                 \
+		gpu_current = gpu;                                   \
+		gpu_uni_float( "T", TIME );                          \
+		gpu_uni_int( "F", FRAME );                           \
+		gpu_uni_ivec2( "R", ivec2( win_tex_w, win_tex_h ) ); \
 	} while( false )
 
 #define gpu_uni_int( name, val ) glUniform1i( glGetUniformLocation( gpu_current, name ), val )
 #define gpu_uni_float( name, val ) glUniform1f( glGetUniformLocation( gpu_current, name ), val )
+#define gpu_uni_ivec2( name, val ) glUniform2i( glGetUniformLocation( gpu_current, name ), val.x, val.y )
+#define gpu_uni_mat4( name, val ) glUniformMatrix4fv( glGetUniformLocation( gpu_current, name ), 1, false, &val[ 0 ][ 0 ] )
 
 fn gpu_print_errors()
 {
@@ -411,6 +484,8 @@ fn gpu_print_errors()
 	}
 }
 
+// vert_data
+
 fn _vert_data_new( const vert_list& v, const tri_list& t )
 {
 	GLuint va, vb, eb;
@@ -423,31 +498,55 @@ fn _vert_data_new( const vert_list& v, const tri_list& t )
 
 	glEnableVertexArrayAttrib( va, 0 );
 	glVertexArrayAttribBinding( va, 0, 0 );
-	glVertexArrayAttribFormat( va, 0, 2, GL_FLOAT, GL_FALSE, 0 );
+	glVertexArrayAttribFormat( va, 0, 3, GL_FLOAT, GL_FALSE, 0 );
 
 	glEnableVertexArrayAttrib( va, 1 );
 	glVertexArrayAttribBinding( va, 1, 0 );
-	glVertexArrayAttribFormat( va, 1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof( GLfloat ) );
+	glVertexArrayAttribFormat( va, 1, 2, GL_FLOAT, GL_FALSE, 3 * sizeof( GLfloat ) );
 
-	glVertexArrayVertexBuffer( va, 0, vb, 0, 4 * sizeof( GLfloat ) );
+	glVertexArrayVertexBuffer( va, 0, vb, 0, 5 * sizeof( GLfloat ) );
 	glVertexArrayElementBuffer( va, eb );
 
 	return vert_data{ va, GLuint( t.size() ) };
 }
 #define vert_data_new( v, t ) _vert_data_new( v, t )
 
-#define gpu_bind_vert_data( vd ) \
-	do {                           \
-		vert_data_current = vd;      \
-		glBindVertexArray( vd.id );  \
+#define vert_data_bind( vd )    \
+	do {                          \
+		vert_data_current = vd;     \
+		glBindVertexArray( vd.id ); \
 	} while( false )
+
+// gpu_data
+
+#define gpu_data GLuint
+
+fn _gpu_data_new( const uint& size_bytes, void* data_ptr )
+{
+	gpu_data g;
+	glGenBuffers( 1, &g );
+	glBindBuffer( GL_SHADER_STORAGE_BUFFER, g );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, size_bytes, data_ptr, GL_STREAM_DRAW );
+	return g;
+}
+#define gpu_data_new( size_bytes, data_ptr ) _gpu_data_new( size_bytes, data_ptr )
+
+#define gpu_data_bind( data, id ) glBindBufferBase( GL_SHADER_STORAGE_BUFFER, id, data )
+
+#define gpu_data_new_bind( size_bytes, data_ptr, id ) glBindBufferBase( GL_SHADER_STORAGE_BUFFER, id, _gpu_data_new( size_bytes, data_ptr ) )
+
+// gpu invoke
 
 #define gpu_draw_tris() glDrawElements( GL_TRIANGLES, vert_data_current.size, GL_UNSIGNED_INT, 0 )
 
-#define gpu_compute( x, y, z )                                  \
-	do {                                                          \
-		glDispatchCompute( max( 1, x ), max( 1, y ), max( 1, z ) ); \
-		glMemoryBarrier( GL_ALL_BARRIER_BITS );                     \
+fn _gpu_compute( int x = 1, int y = 1, int z = 1 )
+{
+	glDispatchCompute( max( 1, x ), max( 1, y ), max( 1, z ) );
+}
+#define gpu_compute( ... )                  \
+	do {                                      \
+		_gpu_compute( __VA_ARGS__ );            \
+		glMemoryBarrier( GL_ALL_BARRIER_BITS ); \
 	} while( false )
 
 fn _tex_new( u16 w = 1, u16 h = 1 )
@@ -566,16 +665,21 @@ obj obj_default
 
 //
 
-fn main_init( ref( str ) name = "hept", ref( u16 ) w = 640, ref( u16 ) h = 360 )
+const u16 win_w_default = 1920, win_h_default = 1080;
+fn main_init( str name = "hept", u16 w = win_w_default, u16 h = win_h_default )
 {
 	SDL_Init( SDL_INIT_EVERYTHING );
 
+//
+
+rand_seed ( 7 );
+
 	//
-	const int win_scale = 3;
+	const int win_scale = 1;
 	win_tex_w = w;
 win_tex_h = h;
 
-	win_current = SDL_CreateWindow( name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_tex_w * win_scale, win_tex_h * win_scale, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN );
+	win_current = SDL_CreateWindow( name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_tex_w * win_scale, win_tex_h * win_scale, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN );
 
 	_win_update();
 	_dis_update();
@@ -583,7 +687,11 @@ win_tex_h = h;
 	//
 
 	SDL_GL_CreateContext( win_current );
-	SDL_GL_SetSwapInterval( -1 );
+#ifdef vsync
+SDL_GL_SetSwapInterval( 1 );
+#else
+SDL_GL_SetSwapInterval( 0 );
+#endif
 
 	glewExperimental = GL_TRUE;
 	glewInit();
@@ -596,8 +704,8 @@ win_tex_h = h;
 	win_tex = tex_new( win_tex_w, win_tex_h );
 	tex_bind(win_tex,0);
 
-	win_glsl_vert = glsl_new( glsl_vert, "glsl/win_vert.glsl" );
-	win_glsl_frag = glsl_new( glsl_frag, "glsl/win_frag.glsl" );
+	win_glsl_vert = glsl_new( glsl_vert, "win_vert.glsl" );
+	win_glsl_frag = glsl_new( glsl_frag, "win_frag.glsl" );
 	win_gpu = gpu_new( win_glsl_vert, win_glsl_frag );
 /*
 	obj_glsl_comp = glsl_new(glsl_comp, obj_comp.glsl);
@@ -686,6 +794,11 @@ fn main_input()
 	}
 }
 
+global timer TIME_TIMER = timer_now();
+global float TIME = 0;
+global uint FRAME = 0;
+
+global std::vector<rgba> pixels;
 fn main_loop()
 {
 	static int main_loop_n = 0;
@@ -693,7 +806,6 @@ fn main_loop()
 
 	//
 
-	std::vector<rgba> pixels;
 	for( u32 y = 0; y < win_h; y++ )
 	{
 		for( u32 x = 0; x < win_w; x++ )
@@ -702,10 +814,23 @@ fn main_loop()
 		}
 	}
 
-	tex_set( win_tex, 0, 0, win_tex_w, win_tex_h, pixels.data() );
+	vec3 up = vec3( 0., 0., 1. );
+	vec3 pos = vec3( 1.0f, 1.0f, 1.0f );
+	vec3 look = vec3( 0. );
 
+	mat4 view = lookAt( pos, look, up );
+	mat4 proj = perspective( 90., double( win_tex_w ) / double( win_tex_h ), .1, 2000. );
+	//mat4 proj = tweakedInfinitePerspective(90., double( win_tex_w ) / double( win_tex_h ),.01);
+
+	static timer T = timer_now();
+	double time = 0;
 	loop()
 	{
+		time = ( ( time * .9 ) + ( ( timer_get( T, nano ) / 1000000. ) * .1 ) );
+		std::cout << '\r' << time << std::flush;
+		T = timer_now();
+		TIME = timer_get( TIME_TIMER, nano ) / 1'000'000'000.;
+
 		_win_update();
 		_dis_update();
 
@@ -715,19 +840,30 @@ fn main_loop()
 
 		//
 
+		tex_set( win_tex, 0, 0, win_tex_w, win_tex_h, pixels.data() );
+
+		pos = vec3( sin( TIME * .25 ), cos( TIME * .25 ), 1.0f );
+		view = lookAt( pos, look, up );
+
 		if( draw_fnptr != null ) draw_fnptr();
 
 		//
 
+		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
 		gpu_set( win_gpu );
 		gpu_uni_int( "in_tex", 0 );
+		gpu_uni_mat4( "in_view", view );
+		gpu_uni_mat4( "in_proj", proj );
 
-		gpu_bind_vert_data( win_vert_data );
+		vert_data_bind( win_vert_data );
 		gpu_draw_tris();
 
 		//
 
 		SDL_GL_SwapWindow( win_current );
+
+		FRAME++;
 	}
 	quit();
 }
