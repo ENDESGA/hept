@@ -5,6 +5,7 @@
 #include <iostream>
 #include <numeric>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <SDL2/SDL.h>
@@ -73,7 +74,8 @@ using namespace glm;
 #define _PRINT( x ) << x
 #define print( ... ) std::cout __VA_OPT__( EACH( _PRINT, __VA_ARGS__ ) ) << std::endl
 
-#define to( v, n ) for( auto v = 0; v++ <= n; )
+//#define to( v, n ) for( auto v = 0; v++ <= n; )
+#define to( v, n ) for( uint v = 0; v < n; v++ )
 #define from( n, v ) for( auto v = n; v-- > 0; )
 #define iter( n, v ) for( auto n: v )
 
@@ -92,12 +94,17 @@ using namespace glm;
 #define _CASE( x ) case x:
 #define case( ... ) EACH( _CASE, __VA_ARGS__ )
 
+#define fixed static
+
 /*
 using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
 */
+
+//using uint = uint32_t;
+
 using s8 = int8_t;
 using s16 = int16_t;
 using s32 = int32_t;
@@ -109,6 +116,8 @@ using winptr = SDL_Window*;
 using renptr = SDL_Renderer*;
 using texptr = SDL_Texture*;
 
+#define fs std::filesystem
+
 #define list std::vector
 #define duo std::pair
 
@@ -117,9 +126,13 @@ using timer = std::chrono::system_clock::time_point;
 #define timer_now() std::chrono::high_resolution_clock::now()
 #define _timer_type( size ) size##seconds
 #define timer_get( t, size ) std::chrono::duration_cast<std::chrono::_timer_type( size )>( timer_now() - ( t ) ).count()
+#define timer_delta( t, d, size ) std::chrono::duration_cast<std::chrono::_timer_type( size )>( d - t ).count()
 
 #define TIMER_START TIMER_TICK = timer_now();
 #define TIMER_END ( timer_get( TIMER_TICK ) / 1000000.00 )
+
+#define unique( ptr ) std::unique_ptr<ptr>
+#define unique_new( ptr, ... ) std::make_unique<ptr>( __VA_ARGS__ )
 
 //
 
@@ -209,8 +222,6 @@ struct quad
 //
 
 global winptr win_current = null;
-//global renptr ren_current = null;
-//global texptr tex_current = null;
 
 global u16 win_x = 0;
 global u16 win_y = 0;
@@ -239,16 +250,28 @@ global list<rgba> comp_data;
 #define file_create_in( p, f ) std::ifstream f( p, std::ios::in | std::ios::binary )
 #define file_create_out( p, f ) std::ofstream f( p, std::ios::out | std::ios::binary )
 
-str file_read( const std::filesystem::path& p )
+#define file_watch( id, file )                              \
+                                                            \
+	static fs::file_time_type ftv##id;                        \
+	fs::file_time_type lwt##id = fs::last_write_time( file ); \
+	bool ftv_go##id = false;                                  \
+	if( ftv##id != lwt##id )                                  \
+	{                                                         \
+		ftv##id = lwt##id;                                      \
+		ftv_go##id = true;                                      \
+	}                                                         \
+	if( ftv_go##id )
+
+str file_read( const fs::path& p )
 {
 	file_create_in( p, f );
-	const long sz = (long)std::filesystem::file_size( p );
+	const long sz = (long)fs::file_size( p );
 	str result( sz, '\0' );
 	f.read( result.data(), sz );
 	return result;
 }
 
-void file_write( const std::filesystem::path& p, const str& s )
+void file_write( const fs::path& p, const str& s )
 {
 	file_create_out( p, f );
 	f.write( s.data(), (long)s.size() );
@@ -303,7 +326,8 @@ fn hept32()
 #define glsl_frag GL_FRAGMENT_SHADER
 #define glsl_comp GL_COMPUTE_SHADER
 
-#define glsl_max 1024
+#define glsl_comp_tex 32, 32
+#define glsl_comp_max 1024
 
 #define gpu GLuint
 
@@ -324,7 +348,7 @@ struct vert_data
 				id{ id }, size{ size } {};
 };
 
-#define tri_list list<GLuint>
+#define vert_tri_list list<GLuint>
 
 #define tex GLuint
 #define tex_id GLuint
@@ -345,10 +369,11 @@ global vert_list win_verts = {
 	vert( 1., 1., 0., 1., 0. ),
 	vert( 1., -1., 0., 1., 1. ),
 };
-global tri_list win_tris = {
+global vert_tri_list win_tris = {
 	0, 1, 2,
 	0, 2, 3 };
 global tex win_tex = 0;
+global tex win_tex_depth = 0;
 global u16 win_tex_w = 0;
 global u16 win_tex_h = 0;
 global vert_data win_vert_data;
@@ -359,9 +384,7 @@ global glsl obj_glsl_comp = 0;
 //
 
 global const str _glsl_comp_define_pre = R"(
-#version 460 core
-precision mediump float;
-precision highp int;
+#version 460
 )";
 
 global const str _glsl_comp_define = R"(
@@ -372,22 +395,47 @@ global const str _glsl_comp_define = R"(
 #define set imageStore
 #define rgba uvec4
 #define obj struct
-#define tex( id ) layout(rgba8ui, binding = id) uniform uimage2D
-#define data( id ) layout(binding = id) buffer
+#define in_tex( id ) layout(rgba8ui, binding = id) uniform uimage2D
+#define in_data( id ) layout(std430, binding = id) buffer
 #define avg( x, y ) ((x+y)/2.)
 #define to( var, n ) for( uint var = ZERO; var < n; var++ )
 #define norm normalize
+#define fn void
+#define draw() void main()
 
 const ivec3 ID = ivec3(gl_GlobalInvocationID);
-const uint N = uint(
-	gl_GlobalInvocationID.x +
-	(gl_GlobalInvocationID.y * gl_WorkGroupSize.x) +
-	(gl_GlobalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y)
+const int N = int(
+	gl_GlobalInvocationID.x
 );
 
 uniform float T;
 uniform uint F;
 uniform ivec2 R;
+
+#define PI 3.1415926535897932384626433832795028841971693993751058209749445923
+
+// special quotients (was custom fixed-point LUT)
+#define q5d3   .1666666
+#define q5d6   .8333333
+#define q1d12  .0833333
+#define q1d3   .3333333
+#define q1d2   .5
+
+vec3 spectra( float x, float l ) {
+    
+    // (optional) rectangular expand
+    x = mix((x * .5)+.25,x,1. - l);
+    
+    return vec3(
+    // RED + VIOLET-FALLOFF
+    -q1d12 * ( l - 1. ) * (
+    cos( PI * max( 0., min( 1., 12. * abs( ( q1d12 * l + x - q5d6 ) / ( l + 2. ) ) ) ) ) + 1. )
+    + q1d2 * cos( PI * min( 1., ( l + 3. ) * abs( -q5d3 * l + x - q1d3 ) ) ) + q1d2,
+    // GREEN, BLUE
+    q1d2 + q1d2 * cos( PI * min(
+    vec2( 1. ), abs( vec2( x ) - vec2( q1d2, ( 1.0 - ( ( 2. + l ) / 3. ) * q1d2 ) ) )
+    * vec2( 3. + l ) ) ) );
+}
 
 )";
 
@@ -400,8 +448,9 @@ fn _glsl_new_raw( GLenum type, const char* sc )
 
 	int sc_n = 1000;
 	char sc_t[ 1000 ];
+	sc_t[ 0 ] = 0xffu;
 	glGetShaderInfoLog( g, 1000, &sc_n, sc_t );
-	print( sc_t );
+	if( sc_t[ 0 ] != 0xffu ) print( sc_t );
 
 	return g;
 }
@@ -425,6 +474,8 @@ fn _glsl_new( GLenum type, const str& file, const int& size_x = 1, const int& si
 #define glsl_new( type, file, ... ) _glsl_new( type, file __VA_OPT__(, __VA_ARGS__ ) )
 #define glsl_new_raw( type, src ) _glsl_new_raw( type, src )
 
+#define glsl_delete( ... ) glDeleteShader( __VA_ARGS__ )
+
 fn _gpu_new( glsl in_glsl1 = 0, glsl in_glsl2 = 0, glsl in_glsl3 = 0, glsl in_glsl4 = 0, glsl in_glsl5 = 0, glsl in_glsl6 = 0, glsl in_glsl7 = 0 )
 {
 	gpu g = glCreateProgram();
@@ -442,6 +493,8 @@ fn _gpu_new( glsl in_glsl1 = 0, glsl in_glsl2 = 0, glsl in_glsl3 = 0, glsl in_gl
 }
 #define gpu_new( ... ) _gpu_new( __VA_ARGS__ )
 
+#define gpu_delete( ... ) glDeleteProgram( __VA_ARGS__ )
+
 #define gpu_set( gpu )                                   \
 	do {                                                   \
 		glUseProgram( gpu );                                 \
@@ -454,7 +507,8 @@ fn _gpu_new( glsl in_glsl1 = 0, glsl in_glsl2 = 0, glsl in_glsl3 = 0, glsl in_gl
 #define gpu_uni_int( name, val ) glUniform1i( glGetUniformLocation( gpu_current, name ), val )
 #define gpu_uni_float( name, val ) glUniform1f( glGetUniformLocation( gpu_current, name ), val )
 #define gpu_uni_ivec2( name, val ) glUniform2i( glGetUniformLocation( gpu_current, name ), val.x, val.y )
-#define gpu_uni_mat4( name, val ) glUniformMatrix4fv( glGetUniformLocation( gpu_current, name ), 1, false, &val[ 0 ][ 0 ] )
+#define gpu_uni_vec3( name, val ) glUniform3f( glGetUniformLocation( gpu_current, name ), val.x, val.y, val.z )
+#define gpu_uni_mat4( name, val ) glUniformMatrix4fv( glGetUniformLocation( gpu_current, name ), 1, false, &( val )[ 0 ][ 0 ] )
 
 fn gpu_print_errors()
 {
@@ -486,7 +540,7 @@ fn gpu_print_errors()
 
 // vert_data
 
-fn _vert_data_new( const vert_list& v, const tri_list& t )
+fn _vert_data_new( const vert_list& v, const vert_tri_list& t )
 {
 	GLuint va, vb, eb;
 	glCreateVertexArrays( 1, &va );
@@ -527,6 +581,7 @@ fn _gpu_data_new( const uint& size_bytes, void* data_ptr )
 	glGenBuffers( 1, &g );
 	glBindBuffer( GL_SHADER_STORAGE_BUFFER, g );
 	glBufferData( GL_SHADER_STORAGE_BUFFER, size_bytes, data_ptr, GL_STREAM_DRAW );
+	glBindBuffer( 0, 0 );
 	return g;
 }
 #define gpu_data_new( size_bytes, data_ptr ) _gpu_data_new( size_bytes, data_ptr )
@@ -539,17 +594,31 @@ fn _gpu_data_new( const uint& size_bytes, void* data_ptr )
 
 #define gpu_draw_tris() glDrawElements( GL_TRIANGLES, vert_data_current.size, GL_UNSIGNED_INT, 0 )
 
-fn _gpu_compute( int x = 1, int y = 1, int z = 1 )
+fn _gpu_comp( int x = 1, int y = 1, int z = 1 )
 {
 	glDispatchCompute( max( 1, x ), max( 1, y ), max( 1, z ) );
 }
-#define gpu_compute( ... )                  \
+#define gpu_comp( ... )                     \
 	do {                                      \
-		_gpu_compute( __VA_ARGS__ );            \
+		_gpu_comp( __VA_ARGS__ );               \
 		glMemoryBarrier( GL_ALL_BARRIER_BITS ); \
 	} while( false )
 
-fn _tex_new( u16 w = 1, u16 h = 1 )
+#define gpu_comp_tex( w, h )                                         \
+	do {                                                               \
+		_gpu_comp( ceil( float( w ) / 32. ), ceil( float( h ) / 32. ) ); \
+		glMemoryBarrier( GL_ALL_BARRIER_BITS );                          \
+	} while( false )
+
+fn _gpu_load( GLenum type, const str& file, const int& size_x = 1, const int& size_y = 1, const int& size_z = 1 )
+{
+	return gpu_new( glsl_new( type, file, size_x, size_y, size_z ) );
+}
+#define gpu_load( type, file, ... ) _gpu_load( type, file, __VA_ARGS__ )
+
+//
+
+fn _tex_new( u16 w = 1, u16 h = 1, void* p = null )
 {
 	tex t;
 	glCreateTextures( GL_TEXTURE_2D, 1, &t );
@@ -561,26 +630,61 @@ fn _tex_new( u16 w = 1, u16 h = 1 )
 	glTextureParameteri( t, GL_TEXTURE_COMPARE_FUNC, GL_NEVER );
 	glTextureStorage2D( t, 1, GL_RGBA8, GLsizei( w ), GLsizei( h ) );
 
-	std::vector<rgba> pixels;
+	//void* _pixels = p;
+	list<rgba> _plist;
+	//if( p == null )
+	//{
 	for( u32 y = 0; y < h; y++ )
 	{
 		for( u32 x = 0; x < w; x++ )
 		{
-			pixels.push_back( rgba{} );
+			_plist.push_back( rgba{ 255, 255, 255, 255 } );
 		}
 	}
-	glTextureSubImage2D( t, 0, 0, 0, GLsizei( w ), GLsizei( h ), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data() );
-	glBindImageTexture( 0, t, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8UI );
+	//_pixels = _plist.data();
+	//}
+	glTextureSubImage2D( t, 0, 0, 0, GLsizei( w ), GLsizei( h ), GL_RGBA, GL_UNSIGNED_BYTE, _plist.data() );
 	return t;
 }
 #define tex_new( ... ) _tex_new( __VA_ARGS__ )
 
-#define tex_bind( t, id )       \
-	do {                          \
-		glBindTextureUnit( id, t ); \
+#define tex_bind( t, id )                                                   \
+	do {                                                                      \
+		glBindTextureUnit( id, t );                                             \
+		glBindImageTexture( id, t, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8UI ); \
 	} while( false )
 
 #define tex_set( t, x, y, w, h, p ) glTextureSubImage2D( t, 0, GLint( x ), GLint( y ), GLsizei( w ), GLsizei( h ), GL_RGBA, GL_UNSIGNED_BYTE, p )
+
+fn tex_load( str filename )
+{
+	auto tp = IMG_Load( filename.c_str() );
+
+	return tp;
+}
+
+//
+
+struct spr
+{
+		str file;
+		u16 w = 1, h = 1;
+		list<rgba> pixels;
+};
+
+list<unique( spr )> SPRITES;
+list<str> SPR_LOADLIST;
+
+#define spr_new( name, filename )           \
+	uint name = []() {                        \
+		SPR_LOADLIST.emplace_back( filename );  \
+		return uint( SPR_LOADLIST.size() - 1 ); \
+	}();
+
+#define spr_get( name ) ( SPRITES[ name ] )
+#define spr_pixels( name ) ( SPRITES[ name ]->pixels )
+#define spr_w( name ) ( SPRITES[ name ]->w )
+#define spr_h( name ) ( SPRITES[ name ]->h )
 
 //
 
@@ -665,8 +769,10 @@ obj obj_default
 
 //
 
+global list<rgba> pixels;
+
 const u16 win_w_default = 1920, win_h_default = 1080;
-fn main_init( str name = "hept", u16 w = win_w_default, u16 h = win_h_default )
+fn main_init( str name = "hept", u16 w = win_w_default, u16 h = win_h_default, u16 scale = 1 )
 {
 	SDL_Init( SDL_INIT_EVERYTHING );
 
@@ -675,7 +781,7 @@ fn main_init( str name = "hept", u16 w = win_w_default, u16 h = win_h_default )
 rand_seed ( 7 );
 
 	//
-	const int win_scale = 1;
+	const int win_scale = scale;
 	win_tex_w = w;
 win_tex_h = h;
 
@@ -697,11 +803,19 @@ SDL_GL_SetSwapInterval( 0 );
 	glewInit();
 	glViewport( 0, 0, win_tex_w * win_scale, win_tex_h * win_scale );
 
+	for( u32 y = 0; y < win_tex_h; y++ )
+		{
+			for( u32 x = 0; x < win_tex_w; x++ )
+			{
+				pixels.push_back( rgba{0,0,0,0} );
+			}
+		}
+
 	// window gpu
 
 	win_vert_data = vert_data_new( win_verts, win_tris );
 
-	win_tex = tex_new( win_tex_w, win_tex_h );
+	win_tex = tex_new( win_tex_w, win_tex_h, null );
 	tex_bind(win_tex,0);
 
 	win_glsl_vert = glsl_new( glsl_vert, "win_vert.glsl" );
@@ -712,6 +826,27 @@ SDL_GL_SetSwapInterval( 0 );
 	obj_gpu = gpu_new( obj_glsl_comp );*/
 
 	gpu_print_errors();
+
+//
+
+if( !SPR_LOADLIST.empty() ) {
+		iter( s, SPR_LOADLIST ) {
+			unique( spr ) tspr = unique_new( spr );
+			auto lspr = IMG_Load(("spr/" + s).c_str());
+if(lspr == NULL) continue; else print("spr loaded: " + s);
+			u8 r=0,g=0,b=0,a=0;
+			to(p,lspr->w * lspr->h)
+			{
+				SDL_GetRGBA(((uint32_t*)lspr->pixels)[p],lspr->format,&r,&g,&b,&a);
+				tspr->pixels.emplace_back(r,g,b,a);
+			}
+tspr->w = lspr->w;
+tspr->h = lspr->h;
+
+			SPRITES.push_back( move( tspr ) );
+		}
+	}
+print();
 }
 
 global void ( *draw_fnptr )() = null;
@@ -797,8 +932,6 @@ fn main_input()
 global timer TIME_TIMER = timer_now();
 global float TIME = 0;
 global uint FRAME = 0;
-
-global std::vector<rgba> pixels;
 fn main_loop()
 {
 	static int main_loop_n = 0;
@@ -806,27 +939,19 @@ fn main_loop()
 
 	//
 
-	for( u32 y = 0; y < win_h; y++ )
-	{
-		for( u32 x = 0; x < win_w; x++ )
-		{
-			pixels.push_back( rgba{} );
-		}
-	}
+	//vec3 up = vec3( 0., 0., 1. );
+	//vec3 pos = vec3( 1.0f, 1.0f, 1.0f );
+	//vec3 look = vec3( 0. );
 
-	vec3 up = vec3( 0., 0., 1. );
-	vec3 pos = vec3( 1.0f, 1.0f, 1.0f );
-	vec3 look = vec3( 0. );
-
-	mat4 view = lookAt( pos, look, up );
-	mat4 proj = perspective( 90., double( win_tex_w ) / double( win_tex_h ), .1, 2000. );
+	//mat4 view = lookAt( pos, look, up );
+	//mat4 proj = perspective( 90., double( win_tex_w ) / double( win_tex_h ), .1, 2000. );
 	//mat4 proj = tweakedInfinitePerspective(90., double( win_tex_w ) / double( win_tex_h ),.01);
 
 	static timer T = timer_now();
 	double time = 0;
 	loop()
 	{
-		time = ( ( time * .9 ) + ( ( timer_get( T, nano ) / 1000000. ) * .1 ) );
+		time = ( time + ( timer_get( T, nano ) / 1000000. ) ) / 2.;
 		std::cout << '\r' << time << std::flush;
 		T = timer_now();
 		TIME = timer_get( TIME_TIMER, nano ) / 1'000'000'000.;
@@ -840,21 +965,24 @@ fn main_loop()
 
 		//
 
-		tex_set( win_tex, 0, 0, win_tex_w, win_tex_h, pixels.data() );
+		//tex_set( win_tex, 0, 0, win_tex_w, win_tex_h, pixels.data() );
 
-		pos = vec3( sin( TIME * .25 ), cos( TIME * .25 ), 1.0f );
-		view = lookAt( pos, look, up );
+		//pos = vec3( sin( TIME * .25 ), cos( TIME * .25 ), 1.0f );
+		//view = lookAt( pos, look, up );
+		//glClearColor(0,0,0,0);
+		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 		if( draw_fnptr != null ) draw_fnptr();
 
 		//
 
-		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+		//glActiveTexture( GL_TEXTURE_BASE_LEVEL );
+		//glBindTexture( GL_TEXTURE_2D, win_tex );
 
 		gpu_set( win_gpu );
 		gpu_uni_int( "in_tex", 0 );
-		gpu_uni_mat4( "in_view", view );
-		gpu_uni_mat4( "in_proj", proj );
+		//gpu_uni_mat4( "in_view", view );
+		//gpu_uni_mat4( "in_proj", proj );
 
 		vert_data_bind( win_vert_data );
 		gpu_draw_tris();

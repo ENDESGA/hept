@@ -3,8 +3,8 @@
 layout (location = 0) in vec3 pos;
 layout (location = 1) in vec2 uv;
 
-uniform mat4 in_view;
-uniform mat4 in_proj;
+//uniform mat4 in_view;
+//uniform mat4 in_proj;
 
 out vec2 vert_uv;
 
