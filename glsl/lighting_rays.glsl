@@ -38,7 +38,6 @@ draw()
 		//hs += xs;
 		//vs += ys;
 	};
-	rgba in_light = get(lighting_tex, ivec2(ID));//(get(lighting_tex, ivec2(ID)) + c + c + c + c + c + c) / 7;
-	c = ((in_light << 6) + c) / 65;
+	c = (get(lighting_tex, ivec2(ID)) + c)/2;//(get(lighting_tex, ivec2(ID)) + c + c + c + c + c + c) / 7;
 	set(lighting_tex, ivec2(ID), c);
 }

@@ -11,8 +11,11 @@ draw()
 	if (in_c.a <= 0x11u) return;
 	rgba in_lighting = get(lighting_tex, ivec2(ID));
 
-	c = rgba(uvec3((vec3(in_c.rgb)/255.)*mix(pow(vec3(in_lighting.rgb)/255., vec3(2.)), vec3(1.), .2)*255.), 255);
+	vec3 light = pow(vec3(in_lighting.rgb)/255., vec3(2.));
 
+	c = rgba(uvec3((vec3(in_c.rgb)/255.)*mix(light, vec3(1.), .2)*255.), 255);
+
+	c += rgba(light * 8., 0);
 	/*int x1 = ID.x, y1 = ID.y;
 	int x2 = (R.x/2)+int(sin(T*2.)*128.), y2 = (R.y/2)+int(cos(T*2.)*64.)-128;
 	float d = distance(vec2(x1, y1), vec2(x2, y2));

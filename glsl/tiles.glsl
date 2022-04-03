@@ -1,5 +1,5 @@
 in_tex( 0 ) tex;
-in_tex( 1 ) tiles_tex;
+/*in_tex( 1 ) tiles_tex;
 
 obj tile
 {
@@ -10,10 +10,12 @@ in_data( 3 ) tiles_data
 {
 	tile in_list[];
 };
-const int list_n = in_list.length();
+const int list_n = in_list.length();*/
 
 draw()
 {
+	rgba c = get(tex, ID.xy);
+	if (((ID.x + ID.y) % 2) == 0) set(tex, ID.xy, rgba(vec3((.5+sin(T)*.5)*255., 0, 0), 255));//(c + c + c + (rgba(4, 0, 1, 4) * rgba(((ID.x + ID.y + int(F/20)) % 2)*64))) / 4);
 	/*uint tile_index = (N / 256);
 	if( tile_index>=list_n ) return;
 	tile t = in_list[tile_index];

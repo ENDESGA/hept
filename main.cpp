@@ -1,6 +1,36 @@
-//#define vsync
+#define vsync
 #include "hept.h"
 
+global uint W = 320, H = 180;
+global uint CAM_BUFFER = 64;
+
+global gpu_tex cam_tex;
+global list<rgba> cam_tex_pixels;
+global uint cam_w = W + CAM_BUFFER, cam_h = H + CAM_BUFFER;
+
+//
+
+layer_ptr layer_sky, layer_tiles, layer_cam;
+
+main( "hept", W, H, 2 )
+{
+	to( y, cam_h )
+		to( x, cam_w )
+	{
+		cam_tex_pixels.push_back( rgba( 0 ) );
+	}
+	cam_tex = gpu_tex_new( cam_w, cam_h );
+	gpu_tex_bind( cam_tex, 1 );
+	gpu_tex_set( cam_tex, 0, 0, cam_w, cam_h, cam_tex_pixels.data() );
+
+	layer_sky = layer_new( "layer_sky", "glsl/sky.glsl", true, 0, 0, cam_w, cam_h );
+	//layer_tiles = layer_new( "layer_tiles", "glsl/tiles.glsl" );
+	layer_cam = layer_new( "layer_cam", "glsl/cam.glsl" );
+}
+
+//
+
+/*
 global glsl world_bg_glsl;
 global gpu world_bg_gpu;
 
@@ -34,10 +64,10 @@ obj bloom_pixel
 global list<bloom_pixel> bloom_pixels;
 global gpu_data bloom_pixels_data;
 
-global const uint W = 640, H = 360;
+global const uint W = 320, H = 180;
 global const uint TEX_W = W - 64, TEX_H = H + 64;
 
-main( "hept", W, H, 1 )
+main( "hept", W, H, 3 )
 {
 	tiles_tex = tex_new( win_tex_w, win_tex_h, null );
 	tex_bind( tiles_tex, 1 );
@@ -58,10 +88,10 @@ main( "hept", W, H, 1 )
 
 	//
 
-	/*loop( W * H )
+	loop( W * H )
 	{
 		bloom_pixels.push_back({int(rand() % win_tex_w), int(rand() % win_tex_h)});
-	}*/
+	}
 	bloom_pixels.push_back( { 64, 64 } );
 	bloom_pixels.push_back( { 16, 32 } );
 	bloom_pixels.push_back( { 32, 48 } );
@@ -135,17 +165,17 @@ draw()
 	gpu_comp_tex( TEX_W, TEX_H );
 
 	//
-	/*gpu_set( bloom_get_gpu );
+	gpu_set( bloom_get_gpu );
 	gpu_comp_tex( W, H );
 
 	gpu_set( bloom_set_gpu );
-	gpu_comp( bloom_pixels.size() );*/
+	gpu_comp( bloom_pixels.size() );
 	//
 
 	gpu_set( lighting_gpu );
 	gpu_comp_tex( TEX_W, TEX_H );
 }
-
+*/
 //
 
 /*
@@ -306,7 +336,7 @@ draw()
 
 	//
 
-	/*glUseProgram( rast_gpu );
+	/ *glUseProgram( rast_gpu );
 	glMemoryBarrier( GL_COMMAND_BARRIER_BIT );
 	glBindBuffer( GL_DISPATCH_INDIRECT_BUFFER, dispatch_args_buffer );
 	glDispatchComputeIndirect( 0 );* /
@@ -315,7 +345,7 @@ draw()
 	gpu_compute( ceil( ( win_tex_w * win_tex_h ) / 1024. ) );
 }
 
-/*
+/ *
 global glsl shader;
 global gpu main_gpu;
 
@@ -543,7 +573,7 @@ main( "", 640, 360, 2 )
 	// plane
 	pnt_list.push_back( tri{ pnt{ -3, -3, -1 }, pnt{ 3, -3, -1 }, pnt{ 3, 3, -1 } } );
 	pnt_list.push_back( tri{ pnt{ -3, -3, -1 }, pnt{ 3, 3, -1 }, pnt{ -3, 3, -1 } } );
-	/*
+	/ *
 	// top
 	pnt_list.push_back( tri{ pnt{ -1, -1, 1 }, pnt{ 1, -1, 1 }, pnt{ 1, 1, 1 } } );
 	pnt_list.push_back( tri{ pnt{ -1, -1, 1 }, pnt{ 1, 1, 1 }, pnt{ -1, 1, 1 } } );
@@ -624,7 +654,7 @@ draw()
 
 //
 
-/*#define vsync
+/ *#define vsync
 #include "hept.h"
 
 global glsl test_glsl;
