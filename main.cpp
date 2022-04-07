@@ -4,28 +4,54 @@
 global uint W = 320, H = 180;
 global uint CAM_BUFFER = 64;
 
+global gpu_tex world_tex;
+global list<rgba> world_tex_pixels;
+
 global gpu_tex cam_tex;
 global list<rgba> cam_tex_pixels;
-global uint cam_w = W + CAM_BUFFER, cam_h = H + CAM_BUFFER;
+// add CAM_BUFFER for the left+right & top+bottom side, i.e. * 2
+global uint cam_w = W + ( CAM_BUFFER * 2 ), cam_h = H + ( CAM_BUFFER * 2 );
 
 //
 
-layer_ptr layer_sky, layer_tiles, layer_cam;
+layer_ptr
+	// world
+	layer_sky,
+	layer_tiles,
+	// cam
+	layer_cam,
+	// eye
+	layer_eye;
 
 main( "hept", W, H, 2 )
 {
 	to( y, cam_h )
 		to( x, cam_w )
 	{
+		world_tex_pixels.push_back( rgba( 0 ) );
+	}
+	world_tex = gpu_tex_new( cam_w, cam_h );
+	gpu_tex_bind( world_tex, 1 );
+	gpu_tex_set( world_tex, 0, 0, cam_w, cam_h, world_tex_pixels.data() );
+
+	to( y, cam_h )
+		to( x, cam_w )
+	{
 		cam_tex_pixels.push_back( rgba( 0 ) );
 	}
 	cam_tex = gpu_tex_new( cam_w, cam_h );
-	gpu_tex_bind( cam_tex, 1 );
-	gpu_tex_set( cam_tex, 0, 0, cam_w, cam_h, cam_tex_pixels.data() );
+	gpu_tex_bind( cam_tex, 2 );
+	gpu_tex_set( cam_tex, 0, 0, cam_w, cam_h, cam_tex_pixels.data() )
 
-	layer_sky = layer_new( "layer_sky", "glsl/sky.glsl", true, 0, 0, cam_w, cam_h );
+		// world
+		layer_sky = layer_new( "layer_sky", "glsl/sky.glsl", true, 0, 0, cam_w, cam_h );
 	//layer_tiles = layer_new( "layer_tiles", "glsl/tiles.glsl" );
-	layer_cam = layer_new( "layer_cam", "glsl/cam.glsl" );
+
+	// cam
+	layer_cam = layer_new( "layer_cam", "glsl/cam.glsl", true, 0, 0, cam_w, cam_h );
+
+	// eye
+	layer_eye = layer_new( "layer_eye", "glsl/eye.glsl" );
 }
 
 //
