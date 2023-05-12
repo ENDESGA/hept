@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
 
 set(PROJECT_NAME "enframe" CACHE STRING "PROJECT_NAME")
-set(SOURCES "src/main.c" "src/hept.h" CACHE STRING "SOURCES")
+set(SOURCES "src/main.c" CACHE STRING "SOURCES")
 set(INCLUDE "inc/")
 
 project(${PROJECT_NAME} C)
