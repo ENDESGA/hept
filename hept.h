@@ -2,30 +2,76 @@
 
 #include "hephaestus.h"
 
-#include "SDL3/SDL.h"
-#include "SDL3/SDL_vulkan.h"
-
 #include "c7h16.h"
 
 //
 
-typedef ptr(SDL_Window) h_window;
-typedef ptr(SDL_Thread) h_thread;
+make_struct {
+#if OS_WINDOWS
+	HWND hwnd;
+#elif OS_LINUX
+	//
+#elif OS_MACOS
+	//
+#endif
+	str name;
+	u32 w, h;
+} h_window_struct;
+make_ptr(h_window_struct) h_window;
+
+LRESULT CALLBACK window_proc(HWND hwnd, UINT u_msg, WPARAM w_param, LPARAM l_param) {
+    if(u_msg == WM_DESTROY)
+	{
+		PostQuitMessage(0);
+        out 0;
+	}
+    out DefWindowProc(hwnd, u_msg, w_param, l_param);
+}
+
+fn h_window new_window( in str in_name, in u32 in_width, in u32 in_height)
+{
+	h_window temp_window = new_mem(h_window_struct,1);
+	//
+#if OS_WINDOWS
+	HINSTANCE h_inst = GetModuleHandle(NULL);
+	WNDCLASSEX wc = {sizeof(WNDCLASSEX), CS_HREDRAW | CS_VREDRAW, window_proc, 0, 0, h_inst, NULL, LoadCursor(NULL, IDC_ARROW), CreateSolidBrush(RGB(0, 0, 0)), NULL, in_name, NULL};
+	RegisterClassEx(&wc);
+	temp_window->w = in_width;
+    temp_window->h = in_height;
+	HWND hwnd = CreateWindowEx(0, wc.lpszClassName, wc.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, temp_window->w, temp_window->h, NULL, NULL, h_inst, NULL);
+    temp_window->hwnd = hwnd;
+#elif OS_LINUX
+	//
+#elif OS_MACOS
+	//
+#endif
+	//
+	out temp_window;
+}
 
 //
 
 /// timer
 
-#define ns_now s64_(SDL_GetTicksNS())
+fn u64 ns_now()
+{
+    LARGE_INTEGER counter;
+    LARGE_INTEGER frequency;
+
+    QueryPerformanceCounter(&counter);
+    QueryPerformanceFrequency(&frequency);
+
+    out u64_(((double)counter.QuadPart / frequency.QuadPart) * 1000000000);
+}
 
 make_type( s64 ) timer;
 
-#define new_timer() ns_now
+#define new_timer() ns_now()
 
-#define timer_get_sec( t ) (f64_(ns_now - t) / 1000000000.L)
-#define timer_get_milli( t ) (f64_(ns_now - t) / 1000000.L)
-#define timer_get_micro( t ) (f64_(ns_now - t) / 1000.L)
-#define timer_get_nano( t ) (f64_(ns_now - t))
+#define timer_get_sec( t ) (f64_(ns_now() - t) / 1000000000.L)
+#define timer_get_milli( t ) (f64_(ns_now() - t) / 1000000.L)
+#define timer_get_micro( t ) (f64_(ns_now() - t) / 1000.L)
+#define timer_get_nano( t ) (f64_(ns_now() - t))
 
 //
 
@@ -393,9 +439,40 @@ void scale_image_nearest_neighbor(
     end_single_time_commands(device, commandPool, graphicsQueue, commandBuffer);
 }
 
+void* load_file(const char* filename, size_t* size) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) {
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    void* buffer = malloc(file_size);
+    if (!buffer) {
+        fclose(file);
+        return NULL;
+    }
+
+    size_t read_size = fread(buffer, 1, file_size, file);
+    fclose(file);
+
+    if (read_size != file_size) {
+        free(buffer);
+        return NULL;
+    }
+
+    if (size) {
+        *size = file_size;
+    }
+
+    return buffer;
+}
+
 VkShaderModule new_shader(VkDevice device, const char *path, shaderc_shader_kind kind) {
   size_t s;
-  const char *source = SDL_LoadFile(path, &s);
+  const char *source = load_file(path, &s);
   VkShaderModule shaderModule = null;
 
   // Initialize shaderc
@@ -421,7 +498,6 @@ VkShaderModule new_shader(VkDevice device, const char *path, shaderc_shader_kind
 
 	if (vkCreateShaderModule(device, &createInfo, NULL, &shaderModule) != VK_SUCCESS) {
 	  print("Failed to create shader module\n");
-	  print("%s\n", SDL_GetError());
 	}
   }
 
@@ -460,7 +536,7 @@ u32 find_debug_layers( in ptr(str) desired_layers, in u32 desired_count, ptr(ptr
 
 //
 
-u32 find_extensions( ptr(ptr(str)) out_extensions )
+/*u32 find_extensions( ptr(ptr(str)) out_extensions )
 {
 	u32 extension_count = 0;
 	SDL_Vulkan_GetInstanceExtensions(adr(extension_count), null);
@@ -468,7 +544,7 @@ u32 find_extensions( ptr(ptr(str)) out_extensions )
 	SDL_Vulkan_GetInstanceExtensions(adr(extension_count), val(out_extensions));
 	//
 	out extension_count;
-}
+}*/
 
 //
 
@@ -657,3 +733,20 @@ OBJECT(
 
 //
 
+fn pure $main_init()
+{
+	h_window main_window = new_window("hept", 512,256);
+	ShowWindow(main_window->hwnd, SW_SHOWDEFAULT);
+	UpdateWindow(main_window->hwnd);
+}
+
+fn pure $main_fn();
+#undef main
+#undef main()
+#define main \
+int main()\
+{\
+	$main_init();\
+	$main_fn();\
+}\
+fn pure $main_fn()\
