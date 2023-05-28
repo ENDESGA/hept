@@ -1,25 +1,24 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
-
 set(CMAKE_C_STANDARD 99)
-
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/out)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/out)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/out)
 
-set(PROJECT_NAME "enframe" CACHE STRING "PROJECT_NAME")
+set(PROJECT_NAME "hept" CACHE STRING "PROJECT_NAME")
 set(SOURCES "src/main.c" CACHE STRING "SOURCES")
 set(INCLUDE "inc/")
 
 project(${PROJECT_NAME} C)
 
+include_directories(${INCLUDE})
+link_directories(${INCLUDE})
+add_executable(${PROJECT_NAME} ${SOURCES})
+
 IF (WIN32)
-    include_directories(${INCLUDE})
-    link_directories(${INCLUDE})
-    add_executable(${PROJECT_NAME} ${SOURCES})
-    target_link_libraries(${PROJECT_NAME} shaderc_shared)
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".exe")
 ELSEIF (UNIX)
-    add_executable(${PROJECT_NAME} ${SOURCES})
-    target_link_libraries(${PROJECT_NAME} m shaderc_shared)
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".bin")
 ENDIF ()
