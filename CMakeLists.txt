@@ -6,8 +6,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
-set(SOURCE_DIR "/src")
-set(INCLUDE_DIR "/inc")
+set(SOURCE_DIR "src")
+set(INCLUDE_DIR "inc")
 
 file(GLOB SOURCES "${SOURCE_DIR}/*.c")
 
