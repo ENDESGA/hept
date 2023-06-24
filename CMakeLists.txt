@@ -16,6 +16,10 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${INCLUDE_DIR})
 
+find_package(Vulkan REQUIRED)
+target_include_directories(${PROJECT_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
+
 if (WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".exe")
 elseif (UNIX)
