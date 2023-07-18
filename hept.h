@@ -26,7 +26,7 @@
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// HEPT template
+/// HEPT
 
 	#define HEPT( NAME, ... )                                            \
 		make_struct{                                                       \
@@ -44,14 +44,27 @@
 
 //
 
+/////// /////// /////// /////// /////// /////// ///////
+
+/// WINDOW
+
+#if OS_WINDOWS
 fn LRESULT CALLBACK process_hept_window( in HWND hwnd, in UINT u_msg, in WPARAM w_param, in LPARAM l_param );
+	#elif OS_LINUX
+fn pure process_hept_window(ptr( Display ) in_disp);
+	#endif
 
 HEPT(
 		window,
 		text name;
 		u32 width, height;
+		#if OS_WINDOWS
 		HWND hwnd;
 		HINSTANCE inst;
+		#elif OS_LINUX
+			ptr(Display) disp;   // X server connection
+			Window xlib_window; // Xlib window
+			#endif
 		h_surface surface;
 		h_surface_capabilities surface_capabilities;
 		h_surface_format surface_format;
@@ -96,60 +109,79 @@ HEPT(
 			wc.hInstance,
 			null );
 	#elif OS_LINUX
-	//
+	Display* disp = XOpenDisplay(NULL);
+	if( disp == NULL) {
+		print( "Cannot open display\n" );
+		out null;
+	}
+	
+	s32 screen_num = DefaultScreen( disp );
+	s32 screen_width = DisplayWidth( disp, screen_num );
+	s32 screen_height = DisplayHeight( disp, screen_num );
+	
+	Window root_win = RootWindow( disp, screen_num );
+
+	temp_window->xlib_window = XCreateSimpleWindow( disp, root_win, ( screen_width - temp_window->width ) / 2, ( screen_height - temp_window->height ) / 2, temp_window->width, temp_window->height, 1, BlackPixel( disp, screen_num ),
+	                                                BlackPixel( disp, screen_num ));
+	
+	XStoreName( disp, temp_window->xlib_window, temp_window->name );
+
+	temp_window->disp = disp;
 	#endif
+	
 	//
 	out temp_window;
 }
 
-fn pure show_hept_window( in hept_window in_window )
-{
+fn pure show_hept_window( in hept_window in_window ) {
 	#if OS_WINDOWS
 	ShowWindow( in_window->hwnd, SW_SHOWDEFAULT );
-	UpdateWindow( in_window->hwnd );
+		UpdateWindow( in_window->hwnd );
 	#elif OS_LINUX
-	//
-	#elif OS_MACOS
-	//
+	XMapWindow( in_window->disp, in_window->xlib_window );
+	XFlush( in_window->disp );
 	#endif
 }
 
-fn flag update_hept_window( in hept_window in_window )
-{
+fn flag update_hept_window( in hept_window in_window ) {
+	
+	once flag visible = no, reveal = no;
 	#if OS_WINDOWS
 	once MSG msg = { 0 };
-	once flag visible = no, reveal = no;
-	while( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
-	{
-		if( msg.message == WM_QUIT )
+		
+		while( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
 		{
-			out no;
+				if( msg.message == WM_QUIT )
+				{
+						out no;
+				}
+				else
+				{
+						TranslateMessage( &msg );
+						DispatchMessage( &msg );
+				}
 		}
-		else
-		{
-			TranslateMessage( &msg );
-			DispatchMessage( &msg );
-		}
-	}
-
+		
 	#elif OS_LINUX
-	//
-	#elif OS_MACOS
-	//
+	process_hept_window( in_window->disp );
 	#endif
-	ifn( visible )
-	{
-		if( reveal )
-		{
+	
+	ifn( visible ) {
+		if( reveal ) {
 			show_hept_window( in_window );
 			visible = yes;
-		}
-		else reveal = yes;
+		} else reveal = yes;
 	}
+	
 	out yes;
 }
 
+
 //
+
+/////// /////// /////// /////// /////// /////// ///////
+
+/// MACHINE
 
 HEPT(
 		machine,
@@ -240,6 +272,7 @@ fn pure main_init();
 fn pure main_draw();
 fn pure main_step();
 
+#if OS_WINDOWS
 fn LRESULT CALLBACK process_hept_window( in HWND hwnd, in UINT u_msg, in WPARAM w_param, in LPARAM l_param )
 {
 	if( u_msg == WM_DESTROY )
@@ -269,6 +302,23 @@ fn LRESULT CALLBACK process_hept_window( in HWND hwnd, in UINT u_msg, in WPARAM 
 	}
 	out DefWindowProc( hwnd, u_msg, w_param, l_param );
 }
+#elif OS_LINUX
+fn pure process_hept_window( ptr( Display ) in_disp )
+{
+	XEvent e;
+	spin( XPending( in_disp )) {
+		XNextEvent( in_disp, &e );
+		if( e.type == Expose ) {
+			// Redraw here
+		} else if( e.type == ClientMessage ) {
+			// Handle close event, etc
+			out;
+		}
+	}
+}
+#elif OS_MACOS
+//
+	#endif
 
 //
 
