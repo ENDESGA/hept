@@ -4,10 +4,17 @@ cmake_minimum_required(VERSION 3.20)
 project(hept C)
 set(CMAKE_C_STANDARD 99)
 
+# Define different output directories for Debug and Release configurations
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/out/Debug/)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/out/Release/)
+
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
+set(CMAKE_SUPPRESS_REGENERATION TRUE)
+
 # Set global compiler flags for optimization
 add_compile_options(
-  "$<$<CONFIG:RELEASE>:-O3;-march=native;-flto;-fomit-frame-pointer>"
-  "$<$<CONFIG:DEBUG>:-Og;-g>"
+        "$<$<CONFIG:RELEASE>:-O3;-march=native;-funroll-loops;-fexpensive-optimizations;-finline-functions;-fprefetch-loop-arrays;-ffast-math>"
+        "$<$<CONFIG:DEBUG>:-Og;-g>"
 )
 
 # Directories
@@ -30,7 +37,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Vulkan::Vulkan)
 # Add X11 libraries for Unix systems excluding Apple
 if (UNIX AND NOT APPLE)
   find_package(X11 REQUIRED)
-  target_link_libraries(${PROJECT_NAME} PRIVATE ${X11_LIBRARIES})
+  target_link_libraries(${PROJECT_NAME} PRIVATE X11::X11)
 endif ()
 
 # Define executable suffix based on OS
