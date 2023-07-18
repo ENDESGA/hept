@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 # Project configuration
 project(hept C)
-set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD 99)
 
 # Set global compiler flags for optimization
 add_compile_options(
