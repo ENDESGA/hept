@@ -4,10 +4,6 @@ cmake_minimum_required(VERSION 3.20)
 project(hept C)
 set(CMAKE_C_STANDARD 99)
 
-# Define different output directories for Debug and Release configurations
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG Debug/)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE Release/)
-
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
