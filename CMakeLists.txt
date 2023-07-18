@@ -20,6 +20,12 @@ find_package(Vulkan REQUIRED)
 target_include_directories(${PROJECT_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
 
+if (UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIR})
+    target_link_libraries(${PROJECT_NAME} ${X11_LIBRARIES})
+endif ()
+
 if (WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".exe")
 elseif (UNIX)
