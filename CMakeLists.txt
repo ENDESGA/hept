@@ -3,8 +3,15 @@ cmake_minimum_required(VERSION 3.20)
 project(hept C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/)
+
+# Set up Debug and Release directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/out/Debug)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/out/Release)
+
+# Make sure the configurations are available
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
+
+# This suppresses ZERO_CHECK
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
 set(SOURCE_DIR "src")
