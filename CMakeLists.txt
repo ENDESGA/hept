@@ -33,19 +33,6 @@ if (UNIX AND NOT APPLE)
   target_link_libraries(${PROJECT_NAME} PRIVATE ${X11_LIBRARIES})
 endif ()
 
-# Custom command to capture git revision
-find_package(Git)
-if(GIT_FOUND)
-  execute_process(
-    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GIT_REVISION
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-
-  target_compile_definitions(${PROJECT_NAME} PRIVATE GIT_REVISION="${GIT_REVISION}")
-endif()
-
 # Define executable suffix based on OS
 if (WIN32)
   set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".exe")
