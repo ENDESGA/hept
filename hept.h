@@ -326,6 +326,35 @@ fn pure show_hept_window( in hept_window in_window )
 
 /////// /////// /////// /////// /////// /////// ///////
 
+/// form_mesh
+
+PTR_PILE(
+		form_mesh_attrib,
+		( in h_format in_format, in u32 in_type_size, in u32 in_size, in text in_type_glsl ),
+		{
+
+		},
+		h_format format;
+		u32 type_size;
+		u32 size;
+		text type_glsl; )
+
+//
+
+FORM(
+		mesh,
+		u32 type_size;
+		list attribs;
+		text layout_glsl; )
+( in list in_attribs )
+{
+
+}
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
 /// form_image
 
 make_enum( form_image_type ){
@@ -368,6 +397,10 @@ FORM(
 	out result;
 }
 
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
 /// form_frame
 
 make_enum( form_frame_layer_type ){
@@ -402,6 +435,8 @@ PTR_PILE(
 		},
 		enum( form_frame_layer_type ) type;
 		h_attachment_reference attach_ref; )
+
+//
 
 make_enum( form_frame_type ){
 		form_frame_present,
@@ -504,6 +539,8 @@ FORM(
 }
 
 //
+
+/////// /////// /////// /////// /////// /////// ///////
 
 /// form_renderer
 
@@ -809,25 +846,28 @@ OBJECT_FN( refresh, renderer )
 
 	//
 
-	h_info_semaphore semaphore_info = h_make_info_semaphore();
-	h_info_fence fence_info = h_make_info_fence();
-	h_info_command_buffer command_buffer_info = h_make_info_command_buffer(
-			in_renderer->form->command_pool,
-			h_command_buffer_level_primary );
-
 	in_renderer->image_ready = new_mem( h_semaphore, in_renderer->frames->size );
 	in_renderer->image_done = new_mem( h_semaphore, in_renderer->frames->size );
 	in_renderer->flight_fences = new_mem( h_fence, in_renderer->frames->size );
 	in_renderer->command_buffers = new_mem( h_command_buffer, in_renderer->frames->size );
+
+	h_info_semaphore semaphore_info = h_make_info_semaphore();
+	h_info_fence fence_info = h_make_info_fence();
+	h_info_command_buffer command_buffers_info = h_make_info_command_buffer(
+			in_renderer->form->command_pool,
+			h_command_buffer_level_primary,
+			in_renderer->frames->size );
+
+	h_allocate_command_buffers( in_renderer->form->machine->device, command_buffers_info, in_renderer->command_buffers );
 
 	iter( in_renderer->frames->size, i )
 	{
 		in_renderer->image_ready[ i ] = h_new_semaphore( in_renderer->form->machine->device, semaphore_info );
 		in_renderer->image_done[ i ] = h_new_semaphore( in_renderer->form->machine->device, semaphore_info );
 		in_renderer->flight_fences[ i ] = h_new_fence( in_renderer->form->machine->device, fence_info );
-		in_renderer->command_buffers[ i ] = h_new_command_buffer( in_renderer->form->machine->device, command_buffer_info );
 	}
 	//
+
 	in_renderer->current_frame = 0;
 	in_renderer->fence_id = 0;
 
@@ -995,7 +1035,7 @@ fn pure main_update_hept_windows( in hept_machine in_machine )
 		{
 			if( msg.message == WM_QUIT )
 			{
-				exit( 0 );
+				//exit( 0 );
 				skip;
 			}
 			else
