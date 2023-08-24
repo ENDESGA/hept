@@ -2586,7 +2586,6 @@ fn hept_init( in os_machine in_machine )
 fn exit_hept()
 {
 	// delete_pile
-	exit( 0 );
 }
 
 fn hept_update()
@@ -2837,7 +2836,8 @@ void process_os_window( Display* in_disp )
                                                                                                                        \
 		loop                                                                                                               \
 		{                                                                                                                  \
-			hept_update();                                                                                                   \
+			hept_update();\
+			if(EXIT_HEPT) out 1;                                                                                                   \
 		}                                                                                                                  \
 		DEF_END
 
