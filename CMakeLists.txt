@@ -10,7 +10,6 @@ set(CMAKE_SUPPRESS_REGENERATION TRUE)
 # Set global compiler flags for optimization
 add_compile_options(
         "$<$<CONFIG:RELEASE>:-O3;-march=native;-funroll-loops;-fexpensive-optimizations;-finline-functions;-fprefetch-loop-arrays;-ffast-math>"
-        "$<$<CONFIG:DEBUG>:-Og;-g>"
 )
 
 # Directories
