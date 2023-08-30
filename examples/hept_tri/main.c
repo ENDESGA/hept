@@ -1,10 +1,11 @@
- #include <hept.h>
+#define hept_debug
+#include <hept.h>
 
 global mesh triangle = null;
 
 fn command()
 {
-	start_shader( shader_2d, main_window_width, main_window_height );
+	start_shader( default_shader_2d_tri, main_width, main_height );
 	draw_mesh( triangle );
 	end_shader();
 }
@@ -12,12 +13,12 @@ fn command()
 main(
 	"ENDESGA",
 	"hept_triangle",
-	256,
+	512,
 	256,
 	command
 )
 {
-	triangle = new_mesh( form_mesh_2d );
+	triangle = new_mesh( default_form_mesh_2d );
 	mesh_add_tri(
 		triangle,
 		struct( vertex_2d ),
