@@ -24,177 +24,126 @@
 
 //
 
-/////// /////// /////// /////// /////// /////// ///////
-
-/// PTR PILE
-
-	#define PTR( NAME, ... )                       \
-		make_struct( NAME )                          \
-		{                                            \
-			u32 pile_id;                               \
-			__VA_ARGS__                                \
-		};                                           \
-		make_ptr( struct( NAME ) ) NAME;             \
-		global NAME current_##NAME = null;           \
-		global pile pile_##NAME = null;              \
-		fn set_##NAME( in NAME in_##NAME )           \
-		{                                            \
-			safe_ptr_set( current_##NAME, in_##NAME ); \
-		}
-
-	#define NEW_PTR( NAME, PARAMS, ... )                 \
-		inl NAME assign_##NAME PARAMS                      \
-		{                                                  \
-			NAME this_##NAME = new_mem( struct( NAME ), 1 ); \
-			DEF_START                                        \
-			__VA_ARGS__                                      \
-			DEF_END;                                         \
-			pile_add( pile_##NAME, NAME, this_##NAME );      \
-			this_##NAME->pile_id = pile_##NAME->prev_pos;    \
-			current_##NAME = this_##NAME;                    \
-			out this_##NAME;                                 \
-		}                                                  \
-		fn delete_##NAME( in NAME in_##NAME )              \
-		{                                                  \
-			pile_delete( pile_##NAME, in_##NAME->pile_id );  \
-			free_mem( in_##NAME );                           \
-		}
-
-	#define PTR_PILE( NAME, PARAMS, SET_NEW, ... ) \
-		PTR( NAME, __VA_ARGS__ )                     \
-		NEW_PTR( NAME, PARAMS, SET_NEW )
+global flag hept_exit = no;
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// OS
+global list list_object_piles = null;
 
-	#define OS( NAME, ... )                      \
-		PTR_PILE( os_##NAME, (), {}, __VA_ARGS__ ) \
-		inl os_##NAME new_os_##NAME
+	#define make_object( NAME, ... )                             \
+		make_struct( NAME )                                        \
+		{                                                          \
+			u32 pile_id;                                             \
+			__VA_ARGS__                                              \
+		};                                                         \
+		make_ptr( struct( NAME ) ) NAME;                           \
+		global NAME current_##NAME = null;                         \
+		global pile pile_##NAME = null;                            \
+		fn set_current_##NAME( in NAME in_##NAME )                 \
+		{                                                          \
+			safe_ptr_set( current_##NAME, in_##NAME );               \
+		}                                                          \
+		inl NAME assign_##NAME()                                   \
+		{                                                          \
+			NAME this = new_mem( struct( NAME ), 1 );                \
+			if( pile_##NAME == null )                                \
+			{                                                        \
+				pile_##NAME = new_pile( NAME );                        \
+				list_add( list_object_piles, pile, pile_##NAME );      \
+			}                                                        \
+			pile_add( pile_##NAME, NAME, this );                     \
+			this->pile_id = pile_##NAME->prev_pos;                   \
+			if( current_##NAME == null ) set_current_##NAME( this ); \
+			out this;                                                \
+		}                                                          \
+		fn delete_##NAME( in NAME in_##NAME )                      \
+		{                                                          \
+			pile_delete( pile_##NAME, in_##NAME->pile_id );          \
+			free_mem( in_##NAME );                                   \
+		}                                                          \
+		NAME new_##NAME
 
 //
 
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
+/*
+//
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// os_core
+// NAME
+// -------
+// does thing
 
-global u32 core_version = 1;
-
-OS(
-	core,
-	H_instance instance;
-)
-( in text in_name )
+make_object(
+	NAME,
+	ELEMENTS;
+	ELEMENTS;
+	ELEMENTS;
+)( in PARAMS, in PARAMS )
 {
-	os_core result = assign_os_core();
-	//
-
-	H_info_app info_app = new_Hephaestus_info( in_name, core_version );
-
-	text desired_debug_layers[] = {
-		"VK_LAYER_KHRONOS_validation",
-		//"VK_LAYER_LUNARG_api_dump",
-		//"VK_LAYER_LUNARG_device_simulation",
-		//"VK_LAYER_LUNARG_monitor",
-		//"VK_LAYER_LUNARG_screenshot"
-	};
-	u32 desired_debug_layers_count = 1;
-
-	u32 debug_layer_count = get_debug_layers( null );
-	ptr( H_layer_properties ) available_layers = new_mem( H_layer_properties, debug_layer_count );
-	get_debug_layers( available_layers );
-	ptr( text ) debug_layers = new_mem( text, desired_debug_layers_count );
-
-	u32 enabled_debug_layer_count = 0;
-	iter( desired_debug_layers_count, i )
-	{
-		iter( debug_layer_count, j )
-		{
-			if( compare_text( desired_debug_layers[ i ], available_layers[ j ].layerName ) )
-			{
-				( debug_layers )[ enabled_debug_layer_count++ ] = desired_debug_layers[ i ];
-				skip;
-			}
-		}
-	}
-	free_mem( available_layers );
-
-	u32 extension_count = 2;
-	text extensions[] =
-	{
-		VK_KHR_SURFACE_EXTENSION_NAME,
-	#if OS_WINDOWS
-		VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-	#elif OS_LINUX
-		VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+	#ifdef hept_debug
+	print_error( PARAMS == null, "NAME: PARAMS is null" );
 	#endif
-	};
-
-	H_info_instance instance_info = H_create_info_instance(
-		ref( info_app ),
-		enabled_debug_layer_count,
-		( ptr( const char ) ptr( const ) )debug_layers,
-		extension_count,
-		( ptr( const char ) ptr( const ) )extensions
-	);
-
-	result->instance = H_new_instance( instance_info );
-
-	free_text( debug_layers );
 	//
-	out result;
+	NAME this = assign_NAME();
+	//
+
+	//
+	#ifdef hept_trace
+	print_trace( "new NAME" );
+	#endif
+	//
+	out this;
 }
 
 //
-
-/// os_button
-
-make_struct( os_button )
-{
-	flag pressed;
-	u32 down;
-	flag released;
-};
-make_ptr( struct( os_button ) ) os_button;
-
-global list os_inputs = null;
-global list os_inputs_active = null;
-
-global u32 os_key[ 512 ] = { 0 };
-
-	#define __clamp_key( _ ) ( ( _ & 0x00ffu ) + 0x100u )
+*/
 
 //
 
-/// os_file
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
 
-OS(
-	file,
+/// os
+/*
+	os_* objects are directly associated with the operating system
+	hept is executed on, and are fundamental to creating a hept
+	environment that interacts with files, windows, and hardware.
+*/
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// os_file
+// -------
+// connects and holds a file stored on the system
+
+make_object(
+	os_file,
 	text path;
 	text data;
 	u32 size;
-)
-( in text in_path )
+)( in text in_path )
 {
+	#ifdef hept_debug
+	print_error( in_path == null, "os_file: in_path is null" );
+	#endif
+	//
 	os_file result = assign_os_file();
+	//
 	result->path = in_path;
 	#if OS_WINDOWS
 	HANDLE file = CreateFile( ( LPCSTR )result->path, GENERIC_READ, 0, null, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, null );
-	if( file == INVALID_HANDLE_VALUE )
-	{
-		print( "Failed to open file: %s\n", result->path );
-		out result;
-	}
+
+		#ifdef hept_debug
+	print_error( file == INVALID_HANDLE_VALUE, "failed to open: %s", result->path );
+		#endif
 
 	DWORD file_size_low, file_size_high;
 	file_size_low = GetFileSize( file, ref( file_size_high ) );
@@ -205,36 +154,39 @@ OS(
 	CloseHandle( file_mapping );
 	CloseHandle( file );
 	#elif OS_LINUX
-	int fd = syscall( SYS_open, result->path, O_RDONLY );
-	if( fd == -1 )
-	{
-		print( "Failed to open file: %s\n", result->path );
-		out result;
-	}
+	s32 fd = syscall( SYS_open, result->path, O_RDONLY );
 
-	struct stat st;
-	syscall( SYS_fstat, fd, &st );
+		#ifdef hept_debug
+	print_error( fd == -1, "os_file: failed to open: %s", result->path );
+		#endif
+
+	struct( stat ) st;
+	syscall( SYS_fstat, fd, ref( st ) );
 	result->size = st.st_size;
 
 	result->data = to_text( mmap( NULL, result->size, PROT_READ, MAP_PRIVATE, fd, 0 ) );
 	syscall( SYS_close, fd );
 	#endif
-
+	//
+	#ifdef hept_trace
+	print_trace( "new os_file" );
+	#endif
+	//
 	out result;
 }
 
-fn write_file( in text in_filename, in text in_contents )
+fn write_file( in text in_path, in text in_contents )
 {
-	#ifdef _WIN32
-	HANDLE hFile = CreateFileA( in_filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+	#if OS_WINDOWS
+	HANDLE hFile = CreateFileA( in_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 	if( hFile != INVALID_HANDLE_VALUE )
 	{
 		DWORD bytesWritten;
 		WriteFile( hFile, in_contents, text_length( in_contents ), &bytesWritten, NULL );
 		CloseHandle( hFile );
 	}
-	#else
-	int fd = open( in_filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR );
+	#elif OS_LINUX
+	s32 fd = open( in_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR );
 	if( fd != -1 )
 	{
 		write( fd, in_contents, text_length( in_contents ) );
@@ -243,59 +195,74 @@ fn write_file( in text in_filename, in text in_contents )
 	#endif
 }
 
-flag check_file_exists( char* in_filename )
+flag check_file_exists( in text in_path )
 {
-	#if defined( _WIN32 ) || defined( _WIN64 )
-	DWORD file_attr = GetFileAttributesA( in_filename );
+	#if OS_WINDOWS
+	DWORD file_attr = GetFileAttributesA( in_path );
 	out( file_attr != INVALID_FILE_ATTRIBUTES ) and !( file_attr & FILE_ATTRIBUTE_DIRECTORY );
-	#else
-	out access( in_filename, F_OK ) != -1;
+	#elif OS_LINUX
+	out access( in_path, F_OK ) != -1;
 	#endif
 }
 
 //
 
-/// os_timer
+/////// /////// /////// /////// /////// /////// ///////
 
-OS(
-	timer,
+// os_pacer
+// -------
+// maintains a constant loop frequency
+
+make_object(
+	os_pacer,
 	u32 fps;
 	u64 start;
 	u64 end;
 	u32 time_ns;
-)
-( in u32 in_fps )
+)( in u32 in_fps )
 {
-	os_timer result = assign_os_timer();
+	#ifdef hept_debug
+	print_error( in_fps == 0, "os_pacer: in_fps is 0" );
+	#endif
 	//
-	result->fps = in_fps;
-	result->time_ns = to_u32( to_f32( nano_per_sec ) / to_f32( result->fps ) );
+	os_pacer this = assign_os_pacer();
 	//
-	out result;
+	this->fps = in_fps;
+	this->time_ns = to_u32( to_f64( nano_per_sec ) / to_f64( this->fps ) );
+	//
+	#ifdef hept_trace
+	print_trace( "new os_pacer" );
+	#endif
+	//
+	out this;
 }
 
-fn start_os_timer( in os_timer in_timer )
+fn start_os_pacer( in os_pacer in_pacer )
 {
-	in_timer->start = get_nano();
+	in_pacer->start = get_ns();
 }
 
-fn wait_os_timer( in os_timer in_timer )
+fn wait_os_pacer( in os_pacer in_pacer )
 {
-	in_timer->end = get_nano();
-	u64 time_taken = in_timer->end - in_timer->start;
-	if( time_taken >= in_timer->time_ns ) out;
-	sleep_nano( in_timer->time_ns - time_taken );
+	in_pacer->end = get_ns();
+	u64 time_taken = in_pacer->end - in_pacer->start;
+	if( time_taken >= in_pacer->time_ns ) out;
+	sleep_ns( in_pacer->time_ns - time_taken );
 }
 
-fn change_os_timer( in os_timer in_timer, in u32 in_fps )
+fn change_os_pacer( in os_pacer in_pacer, in u32 in_fps )
 {
-	in_timer->fps = in_fps;
-	in_timer->time_ns = to_u32( to_f32( nano_per_sec ) / to_f32( in_timer->fps ) );
+	in_pacer->fps = in_fps;
+	in_pacer->time_ns = to_u32( to_f64( nano_per_sec ) / to_f64( in_pacer->fps ) );
 }
 
 //
 
-/// os_thread
+/////// /////// /////// /////// /////// /////// ///////
+
+// os_thread
+// -------
+// creates and controls a CPU thread
 
 	#if OS_WINDOWS
 make_type( HANDLE ) os_thread_id;
@@ -303,98 +270,209 @@ make_type( HANDLE ) os_thread_id;
 make_type( pthread_t ) os_thread_id;
 	#endif
 
-OS(
-	thread,
+make_object(
+	os_thread,
 	fn_ptr( function, ptr( pure ), in ptr( pure ) );
 	os_thread_id id;
-)
-( fn_ptr( in_function, ptr( pure ), in ptr( pure ) ) )
+)( fn_ptr( in_function, ptr( pure ), in ptr( pure ) ) )
 {
-	os_thread result = assign_os_thread();
-	result->function = in_function;
-	//
-	#if OS_WINDOWS
-	result->id = CreateThread( NULL, 0, to( LPTHREAD_START_ROUTINE, result->function ), NULL, 0, NULL );
-	#elif OS_LINUX
-	pthread_create( ref( result->id ), NULL, to( fn_ptr(, ptr( pure ), ptr( pure ) ), result->function ), NULL );
+	#ifdef hept_debug
+	print_error( in_function == null, "os_thread: in_function is null" );
 	#endif
 	//
-	out result;
+	os_thread this = assign_os_thread();
+	//
+	this->function = in_function;
+	#if OS_WINDOWS
+	this->id = CreateThread( NULL, 0, to( LPTHREAD_START_ROUTINE, this->function ), null, 0, null );
+	#elif OS_LINUX
+	pthread_create( ref( this->id ), null, to( fn_ptr(, ptr( pure ), ptr( pure ) ), this->function ), null );
+	#endif
+
+	#ifdef hept_debug
+	print_error( this->id == 0, "os_thread: could not create thread" );
+	#endif
+	//
+	#ifdef hept_trace
+	print_trace( "new os_thread" );
+	#endif
+	//
+	out this;
 }
+
 //
 
-/// os_machine
+/////// /////// /////// /////// /////// /////// ///////
 
-OS(
-	machine,
-	os_core core;
+// os_core
+// -------
+// holds the Hephaestus instance.
+
+global u32 os_core_version = 1;
+
+make_object(
+	os_core,
+	H_instance instance;
+)( in text in_name )
+{
+	#ifdef hept_debug
+	print_error( in_name == null, "os_core: in_name is null" );
+	#endif
+	//
+	os_core this = assign_os_core();
+	//
+	H_info_app info_app = H_new_info( in_name, os_core_version );
+
+	text desired_debug_layers[] = {
+		"VK_LAYER_KHRONOS_validation",
+		//"VK_LAYER_LUNARG_api_dump",
+		//"VK_LAYER_LUNARG_device_simulation",
+		//"VK_LAYER_LUNARG_monitor",
+		//"VK_LAYER_LUNARG_screenshot"
+	};
+	u32 desired_debug_layers_count = 1;
+
+	u32 debug_layer_count = H_get_debug_layers( null ), enabled_debug_layer_count = 0;
+	ptr( H_layer_properties ) available_layers = new_mem( H_layer_properties, debug_layer_count );
+	H_get_debug_layers( available_layers );
+	ptr( text ) debug_layers = new_mem( text, desired_debug_layers_count );
+
+	iter( desired_debug_layers_count, i )
+	{
+		iter( debug_layer_count, j )
+		{
+			if( compare_text( desired_debug_layers[ i ], available_layers[ j ].layerName ) )
+			{
+				print_debug( "activated layer: %s", available_layers[ j ].layerName );
+				( debug_layers )[ enabled_debug_layer_count++ ] = desired_debug_layers[ i ];
+				skip;
+			}
+		}
+	}
+
+	#ifdef hept_debug
+	print_error( enabled_debug_layer_count < desired_debug_layers_count, "os_core: debug layers not found" );
+	#endif
+
+	free_mem( available_layers );
+
+	text extensions[] =
+	{
+		VK_KHR_SURFACE_EXTENSION_NAME,
+	#if OS_WINDOWS
+		VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+	#elif OS_LINUX
+		VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+	#endif
+	};
+	u32 extension_count = 2;
+
+	H_info_instance instance_info = H_create_info_instance(
+		ref( info_app ),
+		enabled_debug_layer_count,
+		( ptr( const char ) ptr( const ) )debug_layers,
+		extension_count,
+		( ptr( const char ) ptr( const ) )extensions
+	);
+	this->instance = H_new_instance( instance_info );
+
+	#ifdef hept_debug
+	print_error( this->instance == null, "os_core: instance could not be created" );
+	#endif
+
+	free_text( debug_layers );
+	//
+	#ifdef hept_trace
+	print_trace( "new os_core" );
+	#endif
+	//
+	out this;
+}
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// os_machine
+// -------
+// links the CPU to the GPU
+
+make_object(
+	os_machine,
 	u32 queue_family_index;
 	H_physical_device physical_device;
 	H_device device;
-)
-()
+)()
 {
-	os_machine result = assign_os_machine();
-	result->core = current_os_core;
-	result->physical_device = null;
+	os_machine this = assign_os_machine();
 	//
-	out result;
+	this->physical_device = null;
+	//
+	#ifdef hept_trace
+	print_trace( "new os_machine" );
+	#endif
+	//
+	out this;
 }
 
 //
 
-/// os_window
+/////// /////// /////// /////// /////// /////// ///////
+
+// os_window
+// -------
+// does thing
 
 	#if OS_WINDOWS
 inl LRESULT CALLBACK process_os_window( in HWND hwnd, in UINT u_msg, in WPARAM w_param, in LPARAM l_param );
 
-OS(
-	window,
-	os_core core;
-	text name;
-	fn_ptr( render_fn, pure );
-	flag ready, visible;
-	u32 width, height;
+make_struct( os_window_link )
+{
 	HWND hwnd;
 	HINSTANCE inst;
-	H_surface surface;
-	H_surface_capabilities surface_capabilities;
-	H_surface_format surface_format;
-	H_present_mode present_mode;
-)
+};
 	#elif OS_LINUX
-fn process_os_window( ptr( Display ) in_disp );
+fn process_os_window( ptr( Display ) in_disp, Window in_win );
 
-OS(
-	window,
-	os_core core;
+make_struct( os_window_link )
+{
+	ptr( Display ) xdis;
+	Window xwin;
+};
+	#endif
+
+make_object(
+	os_window,
 	text name;
 	fn_ptr( render_fn, pure );
 	flag ready, visible;
 	u32 width, height;
-	ptr( Display ) xdis;
-	Window xwin;
 	H_surface surface;
 	H_surface_capabilities surface_capabilities;
 	H_surface_format surface_format;
 	H_present_mode present_mode;
-)
-	#endif
-( in text in_name, fn_ptr( in_render_fn, pure ), in u32 in_width, in u32 in_height, in flag is_borderless )
+	struct( os_window_link ) link;
+)( in text in_name, in u32 in_width, in u32 in_height, fn_ptr( in_render_fn, pure ) )
 {
-	os_window result = assign_os_window();
-	result->core = current_os_core;
-	result->name = in_name;
-	result->render_fn = in_render_fn;
-	result->ready = no;
-	result->visible = no;
-	result->width = in_width;
-	result->height = in_height;
+	#ifdef hept_debug
+	print_error( in_render_fn == null, "os_window: in_render_fn is null" );
+	print_error( in_width == 0, "os_window: in_width is 0" );
+	print_error( in_height == 0, "os_window: in_height is 0" );
+	#endif
 	//
+	os_window this = assign_os_window();
+	//
+	this->name = in_name;
+	this->render_fn = in_render_fn;
+	this->ready = no;
+	this->visible = no;
+	this->width = in_width;
+	this->height = in_height;
+
 	#if OS_WINDOWS
 	HWND hwnd = GetConsoleWindow();
-	DWORD window_style = is_borderless ? WS_POPUP : WS_OVERLAPPEDWINDOW;
-	RECT rect = { 0, 0, result->width, result->height };
+	DWORD window_style = WS_OVERLAPPEDWINDOW; // is_borderless ? WS_POPUP : WS_OVERLAPPEDWINDOW;
+	RECT rect = { 0, 0, this->width, this->height };
 	AdjustWindowRect( ref( rect ), window_style, no );
 	s32 this_width = rect.right - rect.left, this_height = rect.bottom - rect.top;
 
@@ -402,15 +480,13 @@ OS(
 		.lpfnWndProc = process_os_window,
 		.hInstance = GetModuleHandle( null ),
 		.hbrBackground = CreateSolidBrush( RGB( 0, 0, 0 ) ),
-		.lpszClassName = result->name };
+		.lpszClassName = this->name };
 
-	ifn( RegisterClass( ref( wc ) ) )
-	{
-		print( "COULD NOT MAKE WINDOW\n" );
-		out null;
-	}
+		#ifdef hept_debug
+	print_error( RegisterClass( ref( wc ) ) == 0, "os_window: cannot create win32 window" );
+		#endif
 
-	result->hwnd = CreateWindowEx(
+	this->link.hwnd = CreateWindowEx(
 		0,
 		wc.lpszClassName,
 		wc.lpszClassName,
@@ -424,61 +500,61 @@ OS(
 		wc.hInstance,
 		null
 	);
-	#elif OS_LINUX
-	result->xdis = XOpenDisplay( NULL );
-	if( result->xdis == NULL )
-	{
-		print( "Cannot open display\n" );
-		out null;
-	}
 
-	s32 screen_num = DefaultScreen( result->xdis );
-	s32 screen_width = DisplayWidth( result->xdis, screen_num );
-	s32 screen_height = DisplayHeight( result->xdis, screen_num );
-
-	Window root_win = RootWindow( result->xdis, screen_num );
-
-	result->xwin = XCreateSimpleWindow( result->xdis, root_win, ( screen_width - result->width ) / 2, ( screen_height - result->height ) / 2, result->width, result->height, 1, BlackPixel( result->xdis, screen_num ), BlackPixel( result->xdis, screen_num ) );
-
-	XStoreName( result->xdis, result->xwin, result->name );
-
-	XSelectInput( result->xdis, result->xwin, ExposureMask | KeyPressMask | KeyReleaseMask );
-
-	#endif
-	//
-	#if OS_WINDOWS
 	VkWin32SurfaceCreateInfoKHR create_info = { 0 };
 	create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-	create_info.hwnd = result->hwnd;
-	create_info.hinstance = result->inst;
+	create_info.hwnd = this->link.hwnd;
+	create_info.hinstance = this->link.inst;
 
-	vkCreateWin32SurfaceKHR( result->core->instance, ref( create_info ), null, ref( result->surface ) );
+	vkCreateWin32SurfaceKHR( current_os_core->instance, ref( create_info ), null, ref( this->surface ) );
+
 	#elif OS_LINUX
+	this->link.xdis = XOpenDisplay( NULL );
+
+		#ifdef hept_debug
+	print_error( this->link.xdis == null, "os_window: cannot open X11 display" );
+		#endif
+
+	s32 screen_num = DefaultScreen( this->link.xdis );
+	s32 screen_width = DisplayWidth( this->link.xdis, screen_num );
+	s32 screen_height = DisplayHeight( this->link.xdis, screen_num );
+
+	Window root_win = RootWindow( this->link.xdis, screen_num );
+
+	this->link.xwin = XCreateSimpleWindow( this->link.xdis, root_win, ( screen_width - this->width ) / 2, ( screen_height - this->height ) / 2, this->width, this->height, 1, BlackPixel( this->link.xdis, screen_num ), BlackPixel( this->link.xdis, screen_num ) );
+
+		#ifdef hept_debug
+	print_error( this->link.xwin == 0, "os_window: cannot create X11 window" );
+		#endif
+
+	XStoreName( this->link.xdis, this->link.xwin, this->name );
+
+	XSelectInput( this->link.xdis, this->link.xwin, StructureNotifyMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask );
+
 	VkXlibSurfaceCreateInfoKHR create_info = { 0 };
 	create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-	create_info.dpy = result->xdis;
-	create_info.window = result->xwin;
+	create_info.dpy = this->link.xdis;
+	create_info.window = this->link.xwin;
 
-	vkCreateXlibSurfaceKHR( result->core->instance, ref( create_info ), null, ref( result->surface ) );
-	#elif OS_MACOS
-	VkMacOSSurfaceCreateInfoMVK create_info = { 0 };
-	create_info.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
-	create_info.pView = ( __bridge void* )( in_machine->window->window.contentView );
+	vkCreateXlibSurfaceKHR( current_os_core->instance, ref( create_info ), null, ref( this->surface ) );
 
-	vkCreateMacOSSurfaceMVK( in_machine->instance, ref( create_info ), null, ref( in_machine->surface ) );
 	#endif
 	//
-	out result;
+	#ifdef hept_trace
+	print_trace( "new os_window" );
+	#endif
+	//
+	out this;
 }
 
 fn show_os_window( in os_window in_window )
 {
 	#if OS_WINDOWS
-	ShowWindow( in_window->hwnd, SW_SHOWDEFAULT );
-	UpdateWindow( in_window->hwnd );
+	ShowWindow( in_window->link.hwnd, SW_SHOWDEFAULT );
+	UpdateWindow( in_window->link.hwnd );
 	#elif OS_LINUX
-	XMapWindow( in_window->xdis, in_window->xwin );
-	XFlush( in_window->xdis );
+	XMapWindow( in_window->link.xdis, in_window->link.xwin );
+	XFlush( in_window->link.xdis );
 	#endif
 	in_window->visible = yes;
 }
@@ -493,61 +569,387 @@ fn show_os_window( in os_window in_window )
 /////// /////// /////// /////// /////// /////// ///////
 /////// /////// /////// /////// /////// /////// ///////
 
-/////// /////// /////// /////// /////// /////// ///////
-
-/// FORM
-
-	#define FORM( NAME, ... )                        \
-		PTR_PILE(                                      \
-			form_##NAME,                                 \
-			( in os_machine in_machine ),                \
-			{ this_form_##NAME->machine = in_machine; }, \
-			os_machine machine;                          \
-			__VA_ARGS__                                  \
-		)                                              \
-		form_##NAME new_form_##NAME
-
+/*
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// form_buffer
+// form_NAME
+// -------
+// holds a blueprint for NAME creation
 
-FORM( buffer,
-			H_buffer_usage usage;
-			H_mem_properties properties; )
-( in os_machine in_machine, H_buffer_usage in_usage, H_mem_properties in_properties )
+make_object(
+	form_NAME,
+	ELEMENTS;
+)( in PARAMS )
 {
-	form_buffer result = assign_form_buffer( in_machine );
-	result->usage = in_usage;
-	result->properties = in_properties;
-	out result;
+	#ifdef hept_debug
+	print_error( in_PARAMS == null, "form_NAME: in_PARAMS is null" );
+	#endif
+	//
+	form_NAME this = assign_form_NAME();
+	//
+
+	//
+	#ifdef hept_trace
+	print_trace( "new form_NAME" );
+	#endif
+	//
+	out this;
 }
 
-global form_buffer form_buffer_vertex = null;
-global form_buffer form_buffer_index = null;
+global form_NAME default_form_NAME_ = null;
+
+//
+*/
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// form_mesh
+// form_buffer
+// -------
+// holds a blueprint for buffer creation
 
-PTR_PILE(
-	form_mesh_attrib, (), {}, H_format format;
+make_object(
+	form_buffer,
+	H_buffer_usage usage;
+	H_memory_properties properties;
+)( in H_buffer_usage in_usage, in H_memory_properties in_properties )
+{
+	#ifdef hept_debug
+	print_error( in_usage == 0, "form_buffer: in_usage is 0" );
+	print_error( in_properties == 0, "form_buffer: in_properties is 0" );
+	#endif
+	//
+	form_buffer this = assign_form_buffer();
+	//
+	this->usage = in_usage;
+	this->properties = in_properties;
+	//
+	#ifdef hept_trace
+	print_trace( "new form_buffer" );
+	#endif
+	//
+	out this;
+}
+
+global form_buffer default_form_buffer_vertex = null;
+global form_buffer default_form_buffer_index = null;
+global form_buffer default_form_buffer_storage = null;
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// form_image
+// -------
+// holds a blueprint for image creation
+
+make_enum( image_type ){
+	image_type_null = 0,
+	image_type_rgba = VK_IMAGE_ASPECT_COLOR_BIT,
+	image_type_depth = VK_IMAGE_ASPECT_DEPTH_BIT,
+	image_type_stencil = VK_IMAGE_ASPECT_STENCIL_BIT,
+};
+
+make_object(
+	form_image,
+	enum( image_type ) type;
+	H_format format;
+	H_sampler sampler;
+)( in enum( image_type ) in_type, in H_format in_format )
+{
+	#ifdef hept_debug
+	print_error( in_type == image_type_null, "form_image: in_type is null" );
+	print_error( in_format == 0, "form_image: in_format is 0" );
+	#endif
+	//
+	form_image this = assign_form_image();
+	//
+	this->type = in_type;
+	this->format = in_format;
+
+	H_info_sampler info = H_create_info_sampler(
+		VK_FILTER_NEAREST,
+		VK_FILTER_NEAREST,
+		VK_SAMPLER_MIPMAP_MODE_NEAREST,
+		VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		0,
+		no,
+		1,
+		no,
+		VK_COMPARE_OP_ALWAYS,
+		0,
+		0,
+		VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+		no
+	);
+	this->sampler = H_new_sampler( current_os_machine->device, info );
+	#ifdef hept_debug
+	print_error( this->sampler == null, "form_image: could not make sampler" );
+	#endif
+	//
+	#ifdef hept_trace
+	print_trace( "new form_image" );
+	#endif
+	//
+	out this;
+}
+
+global form_image default_form_image_rgba = null;
+global form_image default_form_image_depth = null;
+global form_image default_form_image_stencil = null;
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// form_frame_layer
+// -------
+// layer for form_frame
+
+make_enum( frame_layer_type ){
+	frame_layer_type_null = 0,
+	frame_layer_type_rgba = VK_IMAGE_ASPECT_COLOR_BIT,
+	frame_layer_type_depth = VK_IMAGE_ASPECT_DEPTH_BIT,
+	frame_layer_type_stencil = VK_IMAGE_ASPECT_STENCIL_BIT,
+};
+
+make_object(
+	form_frame_layer,
+	enum( frame_layer_type ) type;
+	H_attachment_reference attach_ref;
+	H_format format;
+)( in enum( frame_layer_type ) in_type, in H_format in_format )
+{
+	#ifdef hept_debug
+	print_error( in_type == frame_layer_type_null, "form_frame_layer: in_type is null" );
+	#endif
+	//
+	form_frame_layer this = assign_form_frame_layer();
+	//
+	this->type = in_type;
+	this->attach_ref.attachment = 0;
+	this->attach_ref.layout = VK_IMAGE_LAYOUT_GENERAL;
+	with( this->type )
+	{
+		is( frame_layer_type_rgba )
+		{
+			this->attach_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			skip;
+		}
+
+		is( frame_layer_type_depth )
+			is( frame_layer_type_stencil )
+		{
+			this->attach_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			skip;
+		}
+	default: skip;
+	}
+	this->format = in_format;
+	//
+	#ifdef hept_trace
+	print_trace( "new form_frame_layer" );
+	#endif
+	//
+	out this;
+}
+
+global form_frame_layer default_form_frame_layer_rgba = null;
+global form_frame_layer default_form_frame_layer_depth = null;
+global form_frame_layer default_form_frame_layer_stencil = null;
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// form_frame
+// -------
+// holds a blueprint for frame creation
+
+make_enum( frame_type ){
+	frame_type_null = 0,
+	frame_type_present = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+	frame_type_shader_read = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	frame_type_general = VK_IMAGE_LAYOUT_GENERAL,
+};
+
+make_object(
+	form_frame,
+	enum( frame_type ) type;
+	H_render_pass render_pass;
+	list layers;
+)( in enum( frame_type ) in_type, in list in_layers )
+{
+	#ifdef hept_debug
+	print_error( in_type == frame_type_null, "form_frame: in_type is null" );
+	#endif
+	//
+	form_frame this = assign_form_frame();
+	//
+	this->type = in_type;
+	this->layers = in_layers;
+
+	ptr( H_attachment_reference ) attach_ref_depth_stencil = null;
+	u32 rgba_count = 0;
+
+	iter( this->layers->size, s )
+	{
+		form_frame_layer this_layer = list_get( this->layers, form_frame_layer, s );
+		this_layer->attach_ref.attachment = s;
+		with( this_layer->type )
+		{
+			is( frame_layer_type_rgba )
+			{
+				rgba_count++;
+				skip;
+			}
+
+			is( frame_layer_type_depth )
+				is( frame_layer_type_stencil )
+			{
+				attach_ref_depth_stencil = ref( this_layer->attach_ref );
+				skip;
+			}
+		default: skip;
+		}
+	}
+
+	ptr( H_attachment_reference ) attach_ref_rgba = null;
+	if( rgba_count )
+	{
+		attach_ref_rgba = new_mem( H_attachment_reference, rgba_count );
+
+		iter( rgba_count, r )
+		{
+			form_frame_layer this_layer = list_get( this->layers, form_frame_layer, r );
+			attach_ref_rgba[ r ] = this_layer->attach_ref;
+		}
+	}
+
+	H_subpass_description subpass = { 0 };
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = rgba_count;
+	subpass.pColorAttachments = attach_ref_rgba;
+	subpass.pDepthStencilAttachment = attach_ref_depth_stencil;
+
+	ptr( H_attachment_description ) attachments = new_mem( H_attachment_description, this->layers->size );
+	iter( this->layers->size, l )
+	{
+		form_frame_layer this_layer = list_get( this->layers, form_frame_layer, l );
+		attachments[ l ].format = this_layer->format;
+		attachments[ l ].samples = VK_SAMPLE_COUNT_1_BIT;
+		attachments[ l ].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachments[ l ].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		attachments[ l ].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[ l ].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attachments[ l ].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+		with( this->type )
+		{
+			is( frame_type_present )
+			{
+				attachments[ l ].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+				skip;
+			}
+
+			is( frame_type_shader_read )
+			{
+				attachments[ l ].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				skip;
+			}
+
+			is( frame_type_general )
+			{
+				attachments[ l ].finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+				skip;
+			}
+		default: skip;
+		}
+	}
+
+	H_info_render_pass render_pass_info = H_create_info_render_pass( this->layers->size, attachments, 1, ref( subpass ), 0, null );
+	this->render_pass = H_new_render_pass( current_os_machine->device, render_pass_info );
+	//
+	#ifdef hept_trace
+	print_trace( "new form_frame" );
+	#endif
+	//
+	out this;
+}
+
+global form_frame default_form_frame = null;
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// form_renderer
+// -------
+// holds a blueprint for renderer creation
+
+make_object(
+	form_renderer,
+	H_command_pool command_pool;
+	H_queue queue;
+)()
+{
+	form_renderer this = assign_form_renderer();
+	//
+	this->queue = H_get_queue( current_os_machine->device, current_os_machine->queue_family_index, 0 );
+	if( this->command_pool != null ) vkDestroyCommandPool( current_os_machine->device, this->command_pool, null );
+	H_info_command_pool command_pool_info = H_create_info_command_pool( current_os_machine->queue_family_index );
+	command_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	this->command_pool = H_new_command_pool( current_os_machine->device, command_pool_info );
+	//
+	#ifdef hept_trace
+	print_trace( "new form_renderer" );
+	#endif
+	//
+	out this;
+}
+
+global form_renderer default_form_renderer = null;
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// form_mesh_attrib
+// -------
+// attribute for form_mesh
+
+make_object(
+	form_mesh_attrib,
+	H_format format;
 	u32 type_size;
 	u32 size;
 	text type_glsl;
-)
-
-inl form_mesh_attrib _new_form_mesh_attrib( in H_format in_format, in u32 in_type_size, in u32 in_size, in text in_type_glsl )
+)( in H_format in_format, in u32 in_type_size, in u32 in_size, in text in_type_glsl )
 {
-	form_mesh_attrib this_form_mesh_attrib = assign_form_mesh_attrib();
-	this_form_mesh_attrib->format = in_format;
-	this_form_mesh_attrib->type_size = in_type_size;
-	this_form_mesh_attrib->size = in_size;
-	this_form_mesh_attrib->type_glsl = in_type_glsl;
-	out this_form_mesh_attrib;
+	#ifdef hept_debug
+	print_error( in_format == 0, "form_mesh_attrib: in_format is 0" );
+	print_error( in_type_size == 0, "form_mesh_attrib: in_type_size is 0" );
+	print_error( in_size == 0, "form_mesh_attrib: in_size is 0" );
+	print_error( in_type_glsl == null, "form_mesh_attrib: in_type_glsl is null" );
+	#endif
+	//
+	form_mesh_attrib this = assign_form_mesh_attrib();
+	//
+	this->format = in_format;
+	this->type_size = in_type_size;
+	this->size = in_size;
+	this->type_glsl = in_type_glsl;
+	//
+	#ifdef hept_trace
+	print_trace( "new form_mesh_attrib" );
+	#endif
+	//
+	out this;
 }
 
 	#define $format_type_u8_size_1 VK_FORMAT_R8_UINT
@@ -653,693 +1055,522 @@ global text $format_type_f64_size_3_text = "dvec3";
 	#define $format_type_f64_size_4 VK_FORMAT_R64G64B64A64_SFLOAT
 global text $format_type_f64_size_4_text = "dvec4";
 
-	#define new_form_mesh_attrib( type, size ) _new_form_mesh_attrib( $format_type_##type##_size_##size, size_( type ), size, $format_type_##type##_size_##size##_text )
+	#define new_form_mesh_attrib( type, size ) new_form_mesh_attrib( $format_type_##type##_size_##size, size_( type ), size, $format_type_##type##_size_##size##_text )
 
-global form_mesh_attrib form_mesh_attrib_pos2 = null;
-global form_mesh_attrib form_mesh_attrib_pos3 = null;
-global form_mesh_attrib form_mesh_attrib_uv = null;
-global form_mesh_attrib form_mesh_attrib_rgb = null;
-global form_mesh_attrib form_mesh_attrib_rgba = null;
+global form_mesh_attrib default_form_mesh_attrib_pos2 = null;
+global form_mesh_attrib default_form_mesh_attrib_pos3 = null;
+global form_mesh_attrib default_form_mesh_attrib_uv = null;
+global form_mesh_attrib default_form_mesh_attrib_rgb = null;
+global form_mesh_attrib default_form_mesh_attrib_rgba = null;
 
 //
 
-FORM(
-	mesh,
+/////// /////// /////// /////// /////// /////// ///////
+
+// form_mesh
+// -------
+// holds a blueprint for mesh creation
+
+make_object(
+	form_mesh,
 	u32 type_size;
 	list attribs;
 	text layout_glsl;
-)
-( in os_machine in_machine, in list in_attribs, in flag generate_glsl )
+)( in list in_attribs, in flag generate_glsl )
 {
-	form_mesh result = assign_form_mesh( in_machine );
+	#ifdef hept_debug
+	print_error( in_attribs == null, "form_mesh: in_attribs is null" );
+	#endif
 	//
-	result->type_size = 0;
-	result->attribs = in_attribs;
-	result->layout_glsl = new_text( "", 0 );
+	form_mesh this = assign_form_mesh();
 	//
-	iter_list( result->attribs, a )
+	this->type_size = 0;
+	this->attribs = in_attribs;
+	this->layout_glsl = new_text( "", 0 );
+	//
+	iter_list( this->attribs, a )
 	{
-		form_mesh_attrib this_attrib = list_get( result->attribs, form_mesh_attrib, a );
+		form_mesh_attrib this_attrib = list_get( this->attribs, form_mesh_attrib, a );
 
-		result->type_size += this_attrib->type_size * this_attrib->size;
+		this->type_size += this_attrib->type_size * this_attrib->size;
 	}
 	//
-	out result;
+	#ifdef hept_trace
+	print_trace( "new form_mesh" );
+	#endif
+	//
+	out this;
 }
 
-global form_mesh form_mesh_2d = null;
-global form_mesh form_mesh_3d = null;
+global form_mesh default_form_mesh_2d = null;
+global form_mesh default_form_mesh_3d = null;
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// form_image
+// form_shader_stage
+// -------
+// stage for form_shader
 
-make_enum( image_type ){
-	image_type_rgba = VK_IMAGE_ASPECT_COLOR_BIT,
-	image_type_depth = VK_IMAGE_ASPECT_DEPTH_BIT,
-	image_type_stencil = VK_IMAGE_ASPECT_STENCIL_BIT,
+make_enum( shader_stage_type ){
+	shader_stage_type_null = 0,
+	shader_stage_type_vertex = H_shader_stage_vertex,
+	shader_stage_type_geometry = H_shader_stage_geometry,
+	shader_stage_type_fragment = H_shader_stage_fragment,
+	shader_stage_type_compute = H_shader_stage_compute,
 };
 
-FORM(
-	image,
-	enum( image_type ) type;
-	H_format format;
-	H_sampler sampler;
-)
-( in os_machine in_machine, in enum( image_type ) in_type, in H_format in_format )
+make_object(
+	form_shader_stage,
+	enum( shader_stage_type ) type;
+)( in enum( shader_stage_type ) in_type )
 {
-	form_image result = assign_form_image( in_machine );
-	result->type = in_type;
-	result->format = in_format;
+	#ifdef hept_debug
+	print_error( in_type == shader_stage_type_null, "form_shader_stage: in_type is null" );
+	#endif
 	//
-	VkSamplerCreateInfo sampler_info = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_NEAREST,
-		.minFilter = VK_FILTER_NEAREST,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.mipLodBias = 0.0f,
-		.anisotropyEnable = VK_FALSE,
-		.maxAnisotropy = 1,
-		.compareEnable = VK_FALSE,
-		.compareOp = VK_COMPARE_OP_ALWAYS,
-		.minLod = 0.0f,
-		.maxLod = 0.0f,
-		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-		.unnormalizedCoordinates = VK_FALSE };
-
-	vkCreateSampler( result->machine->device, ref( sampler_info ), null, ref( result->sampler ) );
+	form_shader_stage this = assign_form_shader_stage();
 	//
-	out result;
+	this->type = in_type;
+	//
+	#ifdef hept_trace
+	print_trace( "new form_shader_stage" );
+	#endif
+	//
+	out this;
 }
+
+global form_shader_stage default_form_shader_stage_vert = null;
+global form_shader_stage default_form_shader_stage_geom = null;
+global form_shader_stage default_form_shader_stage_frag = null;
+global form_shader_stage default_form_shader_stage_comp = null;
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// form_frame
+// form_shader_input
+// -------
+// input for form_shader
 
-make_enum( frame_layer_type ){
-	frame_layer_type_rgba = VK_IMAGE_ASPECT_COLOR_BIT,
-	frame_layer_type_depth = VK_IMAGE_ASPECT_DEPTH_BIT,
-	frame_layer_type_stencil = VK_IMAGE_ASPECT_STENCIL_BIT,
+make_enum( shader_input_type ){
+	shader_input_type_null = 0,
+	shader_input_type_image = H_descriptor_type_image,
+	shader_input_type_storage = H_descriptor_type_storage,
 };
 
-PTR_PILE(
-	form_frame_layer, (), {}, enum( frame_layer_type ) type; H_attachment_reference attach_ref;
-)
-
-inl form_frame_layer new_form_frame_layer( in enum( frame_layer_type ) in_type )
+make_object(
+	form_shader_input,
+	enum( shader_input_type ) type;
+	enum( shader_stage_type ) stage_type;
+)( in enum( shader_input_type ) in_type, in enum( shader_stage_type ) in_stage )
 {
-	form_frame_layer this_form_frame_layer = assign_form_frame_layer();
-	this_form_frame_layer->type = in_type;
+	#ifdef hept_debug
+	print_error( in_type == shader_input_type_null, "form_shader_input: in_type is null" );
+	#endif
 	//
-	this_form_frame_layer->attach_ref.attachment = 0;
-	this_form_frame_layer->attach_ref.layout = VK_IMAGE_LAYOUT_GENERAL;
-	with( this_form_frame_layer->type )
-	{
-		is( frame_layer_type_rgba )
-		{
-			this_form_frame_layer->attach_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			skip;
-		}
-
-		is( frame_layer_type_depth )
-			is( frame_layer_type_stencil )
-		{
-			this_form_frame_layer->attach_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			skip;
-		}
-	}
-	out this_form_frame_layer;
+	form_shader_input this = assign_form_shader_input();
+	//
+	this->type = in_type;
+	this->stage_type = in_stage;
+	//
+	#ifdef hept_trace
+	print_trace( "new form_shader_input" );
+	#endif
+	//
+	out this;
 }
 
-//
-
-make_enum( frame_type ){
-	frame_type_present,
-	frame_type_shader_read,
-	frame_type_general,
-};
-
-FORM(
-	frame,
-	enum( frame_type ) type;
-	H_format format;
-	H_render_pass render_pass;
-	list layers;
-)
-( in os_machine in_machine, in enum( frame_type ) in_type, in H_format in_format, in list in_layers )
-{
-	form_frame result = assign_form_frame( in_machine );
-	result->type = in_type;
-	result->format = in_format;
-	result->layers = in_layers;
-	//
-	ptr( H_attachment_reference ) attach_ref_depth_stencil = null;
-	u32 rgba_count = 0;
-
-	iter( result->layers->size, s )
-	{
-		form_frame_layer this_layer = list_get( result->layers, form_frame_layer, s );
-		this_layer->attach_ref.attachment = s;
-		with( this_layer->type )
-		{
-			is( frame_layer_type_rgba )
-			{
-				rgba_count++;
-				skip;
-			}
-
-			is( frame_layer_type_depth )
-				is( frame_layer_type_stencil )
-			{
-				attach_ref_depth_stencil = ref( this_layer->attach_ref );
-				skip;
-			}
-		}
-	}
-
-	ptr( H_attachment_reference ) attach_ref_rgba = null;
-	if( rgba_count )
-	{
-		attach_ref_rgba = new_mem( H_attachment_reference, rgba_count );
-
-		iter( rgba_count, r )
-		{
-			form_frame_layer this_layer = list_get( result->layers, form_frame_layer, r );
-			attach_ref_rgba[ r ] = this_layer->attach_ref;
-		}
-	}
-
-	H_subpass_description subpass = { 0 };
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = rgba_count;
-	subpass.pColorAttachments = attach_ref_rgba;
-	subpass.pDepthStencilAttachment = attach_ref_depth_stencil;
-
-	ptr( H_attachment_description ) attachments = new_mem( H_attachment_description, result->layers->size );
-	iter( result->layers->size, a )
-	{
-		attachments[ a ].format = result->format;
-		attachments[ a ].samples = VK_SAMPLE_COUNT_1_BIT;
-		attachments[ a ].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		attachments[ a ].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		attachments[ a ].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		attachments[ a ].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		attachments[ a ].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-		with( result->type )
-		{
-			is( frame_type_present )
-			{
-				attachments[ a ].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-				skip;
-			}
-
-			is( frame_type_shader_read )
-			{
-				attachments[ a ].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				skip;
-			}
-
-			is( frame_type_general )
-			{
-				attachments[ a ].finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-				skip;
-			}
-		}
-	}
-
-	H_info_render_pass render_pass_info = H_create_info_render_pass( result->layers->size, attachments, 1, ref( subpass ), 0, null );
-	result->render_pass = H_new_render_pass( result->machine->device, render_pass_info );
-	//
-	out result;
-}
+global form_shader_input default_form_shader_input_image = null;
+global form_shader_input default_form_shader_input_storage = null;
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// form_renderer
+// form_shader
+// -------
+// input for form_shader
 
-FORM(
-	renderer,
-	H_command_pool command_pool;
-	H_queue queue;
-)
-( in os_machine in_machine )
-{
-	form_renderer result = assign_form_renderer( in_machine );
-	//
-	result->queue = H_get_queue( result->machine->device, result->machine->queue_family_index, 0 );
-	if( result->command_pool != null ) vkDestroyCommandPool( result->machine->device, result->command_pool, null ); //
-	H_info_command_pool command_pool_info = H_create_info_command_pool( result->machine->queue_family_index );
-	command_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	result->command_pool = H_new_command_pool( result->machine->device, command_pool_info );
-	//
-	out result;
-}
-
-//
-
-/////// /////// /////// /////// /////// /////// ///////
-
-/// form_module
-
-	#define module_stage_vertex H_shader_stage_vertex
-	#define module_stage_geometry H_shader_stage_geometry
-	#define module_stage_fragment H_shader_stage_fragment
-	#define module_stage_compute H_shader_stage_compute
-
-FORM(
-	module,
-	H_shader_stage stage;
-)
-( in os_machine in_machine, in H_shader_stage in_stage )
-{
-	form_module result = assign_form_module( in_machine );
-	//
-	result->stage = in_stage;
-	//
-	out result;
-}
-
-//
-
-/////// /////// /////// /////// /////// /////// ///////
-
-/// form_shader
-
-PTR_PILE(
-	form_shader_input, (), {}, H_shader_stage shader_stage;
-	H_descriptor_type descriptor_type;
-)
-
-inl form_shader_input new_form_shader_input( in H_shader_stage in_shader_stage, in H_descriptor_type in_descriptor_type )
-{
-	form_shader_input this_form_shader_input = assign_form_shader_input();
-	this_form_shader_input->shader_stage = in_shader_stage;
-	this_form_shader_input->descriptor_type = in_descriptor_type;
-	out this_form_shader_input;
-}
-
-FORM(
-	shader,
+make_object(
+	form_shader,
 	H_topology topology;
 	H_descriptor_set_layout descriptor_layout;
 	list inputs;
-)
-( in os_machine in_machine, in H_topology in_topology, in list in_inputs )
+)( in H_topology in_topology, in list in_inputs )
 {
-	form_shader result = assign_form_shader( in_machine );
+	#ifdef hept_debug
+	print_error( in_inputs == null, "form_shader: in_inputs is null" );
+	#endif
 	//
-	result->topology = in_topology;
-	result->inputs = in_inputs;
+	form_shader this = assign_form_shader();
 	//
-	/*
-	VkDescriptorSetLayoutBinding bindings[] = {
-	{
-	.binding = 0,
-	.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = 1,
-	.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-	},
-		{
-			.binding = 0, // 1,
- .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		 },
-	};*/
-
+	this->topology = in_topology;
 	list bindings = new_list( H_descriptor_set_layout_binding );
 
 	iter_list( in_inputs, i )
 	{
 		form_shader_input this_form_shader_input = list_get( in_inputs, form_shader_input, i );
-		list_add( bindings, H_descriptor_set_layout_binding, ( ( H_descriptor_set_layout_binding ){
-																													 .binding = i,
-																													 .descriptorType = this_form_shader_input->descriptor_type,
-																													 .descriptorCount = 1,
-																													 .stageFlags = this_form_shader_input->shader_stage,
-																													 .pImmutableSamplers = null,
-																												 } ) );
+		list_add(
+			bindings,
+			H_descriptor_set_layout_binding,
+			( ( H_descriptor_set_layout_binding ){
+				.binding = i,
+				.descriptorType = to( VkDescriptorType, this_form_shader_input->type ),
+				.descriptorCount = 1,
+				.stageFlags = this_form_shader_input->stage_type,
+				.pImmutableSamplers = null,
+			} )
+		);
 	}
 
 	H_info_descriptor_set_layout layout_info = H_create_info_descriptor_set_layout(
 		bindings->size, ( const ptr( VkDescriptorSetLayoutBinding ) )bindings->data, 0
 	);
-
-	vkCreateDescriptorSetLayout( in_machine->device, ref( layout_info ), null, ref( result->descriptor_layout ) );
+	this->descriptor_layout = H_new_descriptor_set_layout( current_os_machine->device, layout_info );
 	//
-	out result;
+	#ifdef hept_trace
+	print_trace( "new form_shader" );
+	#endif
+	//
+	out this;
 }
+
+global form_shader default_form_shader_pixel = null;
+global form_shader default_form_shader_line = null;
+global form_shader default_form_shader_tri = null;
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
 
-/// form_event
+// hept objects
+// -------
+// using the forms, these objects can be created
 
-make_enum( event_type ){
-	event_type_once,
-	event_type_delay,
-	event_type_always,
-};
+/*
+//
 
-FORM(
-	event,
-	enum( event_type ) type;
-)
-( in os_machine in_machine, in enum( event_type ) in_type )
+/////// /////// /////// /////// /////// /////// ///////
+
+// NAME
+// -------
+//
+
+make_object(
+	NAME,
+	ELEMENTS;
+)( in PARAMS )
 {
-	form_event result = assign_form_event( in_machine );
+	#ifdef hept_debug
+	print_error( in_PARAMS == null, "NAME: in_PARAMS is null" );
+	#endif
 	//
-	result->type = in_type;
+	NAME this = assign_NAME();
 	//
-	out result;
+
+	//
+	#ifdef hept_trace
+	print_trace( "new NAME" );
+	#endif
+	//
+	out this;
 }
 
-//
-
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-
-/////// /////// /////// /////// /////// /////// ///////
-
-/// OBJECT
-
-	#define OBJECT( NAME, IN_FORM, ... )  \
-		PTR_PILE(                           \
-			NAME,                             \
-			( in IN_FORM in_form ),           \
-			{ this_##NAME->form = in_form; }, \
-			IN_FORM form;                     \
-			__VA_ARGS__                       \
-		)                                   \
-		NAME new_##NAME
+global NAME default_NAME_ = null;
 
 //
-
-/// OBJECT_FN
-
-	#define is_empty_
-	#define is_empty_const , in
-	#define comma( ... ) is_empty_##__VA_ARGS__
-
-	#define _OBJECT_FN( VERB, OBJ, ... )                                         \
-		make_fn_ptr( ptr_##VERB##_##OBJ, OBJ, OBJ in_##OBJ comma( __VA_ARGS__ ) ); \
-		OBJ fn_##VERB##_##OBJ( OBJ in_##OBJ comma( __VA_ARGS__ ) );                \
-		ptr_##VERB##_##OBJ VERB##_##OBJ = fn_##VERB##_##OBJ;                       \
-		OBJ fn_##VERB##_##OBJ( OBJ in_##OBJ comma( __VA_ARGS__ ) )
-
-	#define OBJECT_FN( VERB, OBJ, ... ) OBJ VERB##_##OBJ( OBJ in_##OBJ __VA_ARGS__ )
+*/
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// buffer
+// buffer
+// -------
+//
 
-OBJECT(
+make_object(
 	buffer,
-	form_buffer,
-	H_device_buffer device_buff;
-	H_device_mem device_mem;
-)
-( in form_buffer in_form, u64 in_size )
+	form_buffer form;
+	u64 size;
+	H_buffer buffer;
+	H_memory memory;
+)( in form_buffer in_form, in u64 in_size )
 {
-	buffer result = assign_buffer( in_form );
+	#ifdef hept_debug
+	print_error( in_form == null, "buffer: in_form is null" );
+	print_error( in_size == 0, "buffer: in_size is 0" );
+	#endif
 	//
-	VkBufferCreateInfo buffer_info = { 0 };
-	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	buffer_info.size = in_size;
-	buffer_info.usage = result->form->usage;
-	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	ptr( H_device_buffer ) temp_buff = new_mem( H_device_buffer, 1 );
-	result->device_buff = val( temp_buff );
-	ptr( H_device_mem ) temp_mem = new_mem( H_device_mem, 1 );
-	result->device_mem = val( temp_mem );
-
-	vkCreateBuffer( result->form->machine->device, ref( buffer_info ), NULL, ref( result->device_buff ) );
-
-	H_mem_requirements mem_requirements;
-	vkGetBufferMemoryRequirements( result->form->machine->device, result->device_buff, ref( mem_requirements ) );
-
-	H_info_mem_allocate alloc_info = { 0 };
-	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	alloc_info.allocationSize = mem_requirements.size;
-	alloc_info.memoryTypeIndex = H_find_mem( result->form->machine->physical_device, mem_requirements.memoryTypeBits, result->form->properties );
-
-	vkAllocateMemory( result->form->machine->device, ref( alloc_info ), NULL, ref( result->device_mem ) );
-
-	vkBindBufferMemory( result->form->machine->device, result->device_buff, result->device_mem, 0 );
+	buffer this = assign_buffer();
 	//
-	out result;
+	this->form = in_form;
+	this->size = in_size;
+
+	H_info_buffer buffer_info = H_create_info_buffer(
+		this->size,
+		this->form->usage,
+		VK_SHARING_MODE_EXCLUSIVE
+	);
+	this->buffer = H_new_buffer( current_os_machine->device, buffer_info );
+
+	H_memory_requirements mem_requirements = H_get_memory_requirements_buffer( current_os_machine->device, this->buffer );
+	H_info_memory memory_info = H_create_info_memory(
+		mem_requirements.size,
+		H_find_mem(
+			current_os_machine->physical_device,
+			mem_requirements.memoryTypeBits,
+			this->form->properties
+		)
+	);
+	this->memory = H_new_memory_buffer( current_os_machine->device, memory_info, this->buffer );
+	//
+	#ifdef hept_trace
+	print_trace( "new buffer" );
+	#endif
+	//
+	out this;
+}
+
+fn update_buffer( in buffer in_buffer, in ptr( pure ) in_data )
+{
+	ptr( pure ) mapped = null;
+	vkMapMemory( current_os_machine->device, in_buffer->memory, 0, in_buffer->size, 0, ref( mapped ) );
+	copy_mem( mapped, in_data, in_buffer->size );
+	vkUnmapMemory( current_os_machine->device, in_buffer->memory );
 }
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// image
+// image
+// -------
+//
 
 make_enum( image_state ){
+	image_state_null = 0,
 	image_state_src,
 	image_state_dst,
 };
 
-OBJECT(
+make_object(
 	image,
-	form_image,
+	form_image form;
 	enum( image_state ) state;
-	H_image ptr;
+	H_image image;
 	H_image_view view;
-	H_device_mem mem;
+	H_memory memory;
 	u32 width;
 	u32 height;
 	list data;
-)
-( in form_image in_form, in enum( image_state ) in_state, in u32 in_width, in u32 in_height )
+)( in form_image in_form, in enum( image_state ) in_state, in u32 in_width, in u32 in_height )
 {
-	image result = assign_image( in_form );
-	result->state = in_state;
-	result->width = in_width;
-	result->height = in_height;
-	result->data = new_list( rgba );
+	#ifdef hept_debug
+	print_error( in_form == null, "image: in_form is null" );
+	print_error( in_state == image_state_null, "image: in_state is null" );
+	print_error( in_width == 0, "image: in_width is 0" );
+	print_error( in_height == 0, "image: in_height is 0" );
+	#endif
+	//
+	image this = assign_image();
+	//
+	this->form = in_form;
+	this->state = in_state;
+	this->width = in_width;
+	this->height = in_height;
+	this->data = new_list( rgba );
 
 	//
 	H_extent_3d temp_extent = {
-		.width = result->width, // ceilf( f32( temp_image->width ) / 32. ) * 32.,
-		.height = result->height, // ceilf( f32( temp_image->height ) / 32. ) * 32.,
+		.width = this->width,
+		.height = this->height,
 		.depth = 1 };
 
-	VkFormatProperties format_properties;
+	/*VkFormatProperties format_properties;
 	vkGetPhysicalDeviceFormatProperties( result->form->machine->physical_device, result->form->format, ref( format_properties ) );
 
 	if( !( format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT ) )
 	{
 		print( "Format cannot be used as color attachment!\n" );
-	}
+	}*/
 
 	H_info_image image_info = H_create_info_image(
 		VK_IMAGE_TYPE_2D,
 		temp_extent,
 		1,
 		1,
-		result->form->format,
-		( ( result->state == image_state_src ) ? ( VK_IMAGE_TILING_LINEAR ) : ( VK_IMAGE_TILING_OPTIMAL ) ), // OPTIMAL REQUIRES MULTIPLES OF 32x32
+		this->form->format,
+		( ( this->state == image_state_src ) ? ( VK_IMAGE_TILING_LINEAR ) : ( VK_IMAGE_TILING_OPTIMAL ) ), // OPTIMAL REQUIRES MULTIPLES OF 32x32
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		( ( result->state == image_state_src ) ? ( VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT ) : ( VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ) ),
+		( ( this->state == image_state_src ) ? ( VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT ) : ( VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ) ),
 		VK_SHARING_MODE_EXCLUSIVE,
 		VK_SAMPLE_COUNT_1_BIT
 	);
+	this->image = H_new_image( current_os_machine->device, image_info );
 
-	result->ptr = H_new_image( result->form->machine->device, image_info );
-
-	H_mem_requirements mem_requirements;
-	vkGetImageMemoryRequirements( result->form->machine->device, result->ptr, ref( mem_requirements ) );
-
-	H_info_mem_allocate alloc_info = { 0 };
-	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	alloc_info.allocationSize = mem_requirements.size; // ceil( f64( mem_requirements.size ) / 1024. ) * 1024.;
-	alloc_info.memoryTypeIndex = H_find_mem(
-		result->form->machine->physical_device,
-		mem_requirements.memoryTypeBits,
-		( ( result->state == image_state_src ) ? ( H_mem_property_host_visible | H_mem_property_host_coherent ) : ( H_mem_property_device_local ) )
+	H_memory_requirements mem_requirements = H_get_memory_requirements_image( current_os_machine->device, this->image );
+	H_info_memory memory_info = H_create_info_memory(
+		mem_requirements.size,
+		H_find_mem(
+			current_os_machine->physical_device,
+			mem_requirements.memoryTypeBits,
+			( ( this->state == image_state_src ) ? ( H_memory_property_host_visible | H_memory_property_host_coherent ) : ( H_memory_property_device_local ) )
+		)
 	);
-
-	vkAllocateMemory( result->form->machine->device, ref( alloc_info ), null, ref( result->mem ) );
-
-	vkBindImageMemory( result->form->machine->device, result->ptr, result->mem, 0 );
+	this->memory = H_new_memory_image( current_os_machine->device, memory_info, this->image );
 	//
-	out result;
+	#ifdef hept_trace
+	print_trace( "new image" );
+	#endif
+	//
+	out this;
 }
 
-	#pragma pack( push, 1 )
-typedef struct
+fn update_image( in image in_image )
 {
-	uint16_t type; // Magic identifier: 0x4d42
-	uint32_t file_size; // File size in bytes
-	uint16_t reserved1; // Not used
-	uint16_t reserved2; // Not used
-	uint32_t offset; // Offset to image data in bytes from beginning of file (54 bytes usually)
-	uint32_t dib_header_size; // DIB Header size in bytes (40 bytes usually)
-	int32_t width_px; // Width of the image
-	int32_t height_px; // Height of image
-	uint16_t num_planes; // Number of color planes
-	uint16_t bits_per_pixel; // Bits per pixel
-	uint32_t compression; // Compression type
-	uint32_t image_size_bytes; // Image size in bytes
-	int32_t x_resolution_ppm; // Pixels per meter
-	int32_t y_resolution_ppm; // Pixels per meter
-	uint32_t num_colors; // Number of colors
-	uint32_t important_colors; // Important colors
-} BMPHeader;
-	#pragma pack( pop )
+	ptr( pure ) mapped = null;
+	vkMapMemory( current_os_machine->device, in_image->memory, 0, in_image->data->size_type * in_image->data->size, 0, ref( mapped ) );
+	copy_mem( mapped, in_image->data->data, in_image->data->size_type * in_image->data->size );
+	vkUnmapMemory( current_os_machine->device, in_image->memory );
+	/*
+		VkImageMemoryBarrier barrier = { 0 };
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = in_image->image;
 
-image load_bmp_image( in os_file in_file )
-{
-	BMPHeader* header = ( BMPHeader* )in_file->data;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
 
-	if( header->type != 0x4D42 || header->bits_per_pixel != 24 )
-	{
-		// Not a BMP or not 24-bit BMP.
-		out null;
-	}
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = 0;
 
-	char* pixel_data = in_file->data + header->offset;
-	uint32_t pixel_data_size = header->image_size_bytes;
+		VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 
-	image result = new_image( current_form_image, image_state_src, header->width_px, header->height_px );
-	H_info_image_view image_view_info = H_create_info_image_view(
-		result->ptr,
-		VK_IMAGE_VIEW_TYPE_2D,
-		result->form->format,
-		( ( H_component_mapping ){
-			VK_COMPONENT_SWIZZLE_IDENTITY,
-			VK_COMPONENT_SWIZZLE_IDENTITY,
-			VK_COMPONENT_SWIZZLE_IDENTITY,
-			VK_COMPONENT_SWIZZLE_IDENTITY } ),
-		( ( H_image_subresource_range ){
-			frame_layer_type_rgba,
-			0,
-			1,
-			0,
-			1 } )
-	);
-	result->view = H_new_image_view( current_os_machine->device, image_view_info );
-
-	for( uint32_t i = 0; i < pixel_data_size; i += 3 )
-	{
-		char b = pixel_data[ i ];
-		char g = pixel_data[ i + 1 ];
-		char r = pixel_data[ i + 2 ];
-
-		list_add( result->data, rgba, create_rgba( r, g, b, 0xffu ) );
-	}
-
-	out result;
+		vkCmdPipelineBarrier( in_renderer->command_buffers[ in_renderer->current_frame ], src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, ref( barrier ) );
+	*/
 }
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// frame
+// frame
+// -------
+//
 
-OBJECT(
+make_object(
 	frame,
-	form_frame,
-	H_framebuffer buffer;
+	form_frame form;
+	H_framebuffer framebuffer;
 	list images;
 	list views;
-	u32 max_w, max_h;
+	u32 max_w;
+	u32 max_h;
 	H_info_begin_render_pass info_begin;
-	VkClearValue clear_col, clear_dep;
-)
-( in form_frame in_form, in list in_images )
+	VkClearValue clear_col;
+	VkClearValue clear_dep;
+)( in form_frame in_form, in list in_images )
 {
-	frame result = assign_frame( in_form );
-	result->images = in_images;
-	result->views = new_list( H_image_view );
-	result->max_w = 0;
-	result->max_h = 0;
+	#ifdef hept_debug
+	print_error( in_form == null, "frame: in_form is null" );
+	print_error( in_images == null, "frame: in_images is null" );
+	#endif
 	//
-	iter( result->images->size, i )
+	frame this = assign_frame();
+	//
+	this->form = in_form;
+	this->images = in_images;
+	this->views = new_list( H_image_view );
+	this->max_w = 0;
+	this->max_h = 0;
+	//
+	iter( this->images->size, i )
 	{
-		image temp_image = list_get( result->images, image, i );
-		result->max_w = max( result->max_w, temp_image->width );
-		result->max_h = max( result->max_h, temp_image->height );
+		image temp_image = list_get( this->images, image, i );
+		this->max_w = max( this->max_w, temp_image->width );
+		this->max_h = max( this->max_h, temp_image->height );
 	}
 
 	//
 
-	iter( result->form->layers->size, v )
+	iter( this->form->layers->size, v )
 	{
-		image temp_image = list_get( result->images, image, v );
+		image temp_image = list_get( this->images, image, v );
 		H_info_image_view image_view_info = H_create_info_image_view(
-			temp_image->ptr,
+			temp_image->image,
 			VK_IMAGE_VIEW_TYPE_2D,
-			result->form->format,
+			temp_image->form->format,
 			( ( H_component_mapping ){
 				VK_COMPONENT_SWIZZLE_IDENTITY,
 				VK_COMPONENT_SWIZZLE_IDENTITY,
 				VK_COMPONENT_SWIZZLE_IDENTITY,
 				VK_COMPONENT_SWIZZLE_IDENTITY } ),
 			( ( H_image_subresource_range ){
-				list_get( result->form->layers, form_frame_layer, v )->type,
+				list_get( this->form->layers, form_frame_layer, v )->type,
 				0,
 				1,
 				0,
 				1 } )
 		);
-		list_add( result->views, H_image_view, H_new_image_view( result->form->machine->device, image_view_info ) );
+		list_add( this->views, H_image_view, H_new_image_view( current_os_machine->device, image_view_info ) );
 	}
 
 	H_info_framebuffer framebuffer_info = H_create_info_framebuffer(
-		result->form->render_pass,
-		result->views->size,
-		( ptr( H_image_view ) )( result->views->data ),
-		result->max_w,
-		result->max_h,
+		this->form->render_pass,
+		this->views->size,
+		( ptr( H_image_view ) )( this->views->data ),
+		this->max_w,
+		this->max_h,
 		1
 	);
-	result->buffer = H_new_framebuffer( result->form->machine->device, framebuffer_info );
+	this->framebuffer = H_new_framebuffer( current_os_machine->device, framebuffer_info );
 
-	result->clear_col = ( VkClearValue ){ 0., 0., 0., 0. };
+	this->clear_col = ( VkClearValue ){ 0., 0., 0., 0. };
 	// result->clear_dep = (VkClearValue){ 0.,0.,0.,0. };
-	result->info_begin = H_create_info_begin_render_pass(
-		result->form->render_pass,
-		result->buffer,
-		( ( VkRect2D ){ 0, 0, result->max_w, result->max_h } ),
+	this->info_begin = H_create_info_begin_render_pass(
+		this->form->render_pass,
+		this->framebuffer,
+		( ( VkRect2D ){ 0, 0, this->max_w, this->max_h } ),
 		1,
-		ref( result->clear_col )
+		ref( this->clear_col )
 	);
 	//
-	out result;
+	#ifdef hept_trace
+	print_trace( "new frame" );
+	#endif
+	//
+	out this;
 }
+
+global frame default_frame_ = null;
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// renderer
+// renderer
+// -------
+//
 
-OBJECT(
+make_object(
 	renderer,
-	form_renderer,
+	form_renderer form;
 	os_window ref_window;
 	flag changed;
 	H_viewport viewport;
@@ -1357,31 +1588,44 @@ OBJECT(
 	ptr( H_semaphore ) image_ready;
 	ptr( H_semaphore ) image_done;
 	ptr( H_fence ) flight_fences;
-)
-( in form_renderer in_form, in os_window in_window, in u32 in_frame_width, in u32 in_frame_height )
+)( in form_renderer in_form, in os_window in_window, in u32 in_frame_width, in u32 in_frame_height )
 {
-	renderer result = assign_renderer( in_form );
-	result->changed = yes;
-	result->ref_window = in_window;
-	result->swapchain = null;
-	result->current_frame = 0;
-	result->frame_window = null;
-	result->frame_window_width = in_frame_width;
-	result->frame_window_height = in_frame_height;
-	result->frames = new_list( frame );
-	result->fence_id = 0;
-
+	#ifdef hept_debug
+	print_error( in_form == null, "renderer: in_form is null" );
+	print_error( in_window == null, "renderer: in_window is null" );
+	print_error( in_frame_width == 0, "renderer: in_frame_width is 0" );
+	print_error( in_frame_height == 0, "renderer: in_frame_height is 0" );
+	#endif
 	//
-	out result;
+	renderer this = assign_renderer();
+	//
+	this->form = in_form;
+	this->changed = yes;
+	this->ref_window = in_window;
+	this->swapchain = null;
+	this->current_frame = 0;
+	this->frame_window = null;
+	this->frame_window_width = in_frame_width;
+	this->frame_window_height = in_frame_height;
+	this->frames = new_list( frame );
+	this->fence_id = 0;
+	//
+	#ifdef hept_trace
+	print_trace( "new renderer" );
+	#endif
+	//
+	out this;
 }
 
-OBJECT_FN( refresh, renderer )
+fn update_renderer( in renderer in_renderer )
 {
-	vkDeviceWaitIdle( in_renderer->form->machine->device );
+	if( hept_exit ) out;
+
+	vkDeviceWaitIdle( current_os_machine->device );
 
 	//
 
-	if( in_renderer->swapchain != null ) vkDestroySwapchainKHR( in_renderer->form->machine->device, in_renderer->swapchain, null );
+	if( in_renderer->swapchain != null ) vkDestroySwapchainKHR( current_os_machine->device, in_renderer->swapchain, null );
 
 	if( in_renderer->frames->size != 0 )
 	{
@@ -1391,19 +1635,19 @@ OBJECT_FN( refresh, renderer )
 			iter( temp_frame->images->size, j )
 			{
 				image temp_image = list_get( temp_frame->images, image, j );
-				// delete_image( temp_image );
+				delete_image( temp_image );
 			}
-			// delete_frame( temp_frame );
-			vkDestroySemaphore( in_renderer->form->machine->device, in_renderer->image_ready[ i ], null );
-			vkDestroySemaphore( in_renderer->form->machine->device, in_renderer->image_done[ i ], null );
-			vkDestroyFence( in_renderer->form->machine->device, in_renderer->flight_fences[ i ], null );
+			delete_frame( temp_frame );
+			vkDestroySemaphore( current_os_machine->device, in_renderer->image_ready[ i ], null );
+			vkDestroySemaphore( current_os_machine->device, in_renderer->image_done[ i ], null );
+			vkDestroyFence( current_os_machine->device, in_renderer->flight_fences[ i ], null );
 		}
 		in_renderer->frames->size = 0;
 	}
 
 	//
 
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR( in_renderer->form->machine->physical_device, in_renderer->ref_window->surface, ref( in_renderer->ref_window->surface_capabilities ) );
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR( current_os_machine->physical_device, in_renderer->ref_window->surface, ref( in_renderer->ref_window->surface_capabilities ) );
 
 	H_info_swapchain swapchain_info = H_create_info_swapchain(
 		in_renderer->ref_window->surface,
@@ -1423,7 +1667,7 @@ OBJECT_FN( refresh, renderer )
 		null
 	);
 
-	in_renderer->swapchain = H_new_swapchain( in_renderer->form->machine->device, swapchain_info );
+	in_renderer->swapchain = H_new_swapchain( current_os_machine->device, swapchain_info );
 	in_renderer->swapchain_format = in_renderer->ref_window->surface_format.format;
 	in_renderer->swapchain_extent = in_renderer->ref_window->surface_capabilities.currentExtent;
 
@@ -1441,26 +1685,27 @@ OBJECT_FN( refresh, renderer )
 
 	u32 temp_count = 0;
 	ptr( H_image ) temp_images = null;
-	vkGetSwapchainImagesKHR( in_renderer->form->machine->device, in_renderer->swapchain, ref( temp_count ), null );
+	vkGetSwapchainImagesKHR( current_os_machine->device, in_renderer->swapchain, ref( temp_count ), null );
 	temp_images = new_mem( H_image, temp_count );
-	vkGetSwapchainImagesKHR( in_renderer->form->machine->device, in_renderer->swapchain, ref( temp_count ), temp_images );
+	vkGetSwapchainImagesKHR( current_os_machine->device, in_renderer->swapchain, ref( temp_count ), temp_images );
 
 	list layers = new_list( form_frame_layer );
-	form_frame_layer layer_rgba = new_form_frame_layer( frame_layer_type_rgba );
+	form_frame_layer layer_rgba = new_form_frame_layer( frame_layer_type_rgba, in_renderer->swapchain_format );
 	list_add( layers, form_frame_layer, layer_rgba );
 
 	in_renderer->form_frame_window = new_form_frame(
-		in_renderer->form->machine,
 		frame_type_present,
-		in_renderer->swapchain_format,
 		layers
 	);
+
+	form_image temp_form_image = new_form_image( image_type_rgba, in_renderer->swapchain_format );
 
 	iter( temp_count, i )
 	{
 		list temp_list_images = new_list( image );
-		image temp_image = assign_image( null );
-		temp_image->ptr = temp_images[ i ];
+		image temp_image = assign_image();
+		temp_image->form = temp_form_image;
+		temp_image->image = temp_images[ i ];
 		temp_image->width = in_renderer->swapchain_extent.width;
 		temp_image->height = in_renderer->swapchain_extent.height;
 		list_add( temp_list_images, image, temp_image );
@@ -1483,13 +1728,13 @@ OBJECT_FN( refresh, renderer )
 		in_renderer->frames->size
 	);
 
-	H_allocate_command_buffers( in_renderer->form->machine->device, command_buffers_info, in_renderer->command_buffers );
+	H_allocate_command_buffers( current_os_machine->device, command_buffers_info, in_renderer->command_buffers );
 
 	iter( in_renderer->frames->size, i )
 	{
-		in_renderer->image_ready[ i ] = H_new_semaphore( in_renderer->form->machine->device, semaphore_info );
-		in_renderer->image_done[ i ] = H_new_semaphore( in_renderer->form->machine->device, semaphore_info );
-		in_renderer->flight_fences[ i ] = H_new_fence( in_renderer->form->machine->device, fence_info );
+		in_renderer->image_ready[ i ] = H_new_semaphore( current_os_machine->device, semaphore_info );
+		in_renderer->image_done[ i ] = H_new_semaphore( current_os_machine->device, semaphore_info );
+		in_renderer->flight_fences[ i ] = H_new_fence( current_os_machine->device, fence_info );
 	}
 	//
 
@@ -1509,7 +1754,6 @@ OBJECT_FN( refresh, renderer )
 	}
 
 	form_image frame_image_form = new_form_image(
-		in_renderer->form->machine,
 		image_type_rgba,
 		in_renderer->swapchain_format
 	);
@@ -1517,8 +1761,8 @@ OBJECT_FN( refresh, renderer )
 	image temp_image = new_image(
 		frame_image_form,
 		image_state_dst,
-		in_renderer->frame_window_width, // in_renderer->swapchain_extent.width,
-		in_renderer->frame_window_height // in_renderer->swapchain_extent.height
+		in_renderer->frame_window_width,
+		in_renderer->frame_window_height
 	);
 	//
 	list temp_list_images = new_list( image );
@@ -1526,13 +1770,15 @@ OBJECT_FN( refresh, renderer )
 	in_renderer->frame_window = new_frame( current_form_frame, temp_list_images );
 
 	in_renderer->changed = no;
-
-	out in_renderer;
 }
+
+//
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// mesh
+// mesh
+// -------
+//
 
 make_struct( vertex_2d )
 {
@@ -1559,13 +1805,9 @@ make_struct( ind_line )
 	u32 a, b;
 };
 
-//
-
-global list list_update_mesh = null;
-
-OBJECT(
+make_object(
 	mesh,
-	form_mesh,
+	form_mesh form;
 	spinlock lock;
 	flag update;
 	buffer vertex_buffer;
@@ -1573,20 +1815,38 @@ OBJECT(
 	list vertices;
 	list indices;
 	u32 vertex_n;
-)
-( in form_mesh in_form )
+)( in form_mesh in_form )
 {
-	mesh result = assign_mesh( in_form );
+	#ifdef hept_debug
+	print_error( in_form == null, "mesh: in_form is null" );
+	#endif
 	//
-	result->update = yes;
-	result->vertices = new_list( u32 ); //__new_list( 0, 1, result->form->type_size, new_mem( u8, result->form->type_size ) );
-	result->vertices->size_type = result->form->type_size;
-	result->indices = new_list( u32 );
+	mesh this = assign_mesh();
 	//
-	out result;
+	this->form = in_form;
+	this->update = yes;
+	this->vertices = new_list( u32 );
+	this->vertices->size_type = this->form->type_size;
+	this->indices = new_list( u32 );
+	//
+	#ifdef hept_trace
+	print_trace( "new mesh" );
+	#endif
+	//
+	out this;
 }
 
-global mesh mesh_square = null;
+global list list_update_mesh = null;
+
+global mesh default_mesh_square = null;
+
+	#define mesh_add_line( var, vertex_struct, a, b )         \
+		DEF_START                                               \
+		list_add( var->indices, u32, var->vertices->size );     \
+		list_add( var->indices, u32, var->vertices->size + 1 ); \
+		list_add( var->vertices, vertex_struct, a );            \
+		list_add( var->vertices, vertex_struct, b );            \
+		DEF_END
 
 	#define mesh_add_tri( var, vertex_struct, a, b, c )       \
 		DEF_START                                               \
@@ -1600,19 +1860,11 @@ global mesh mesh_square = null;
 
 	#define mesh_add_quad( var, vertex_struct, tl, tr, br, bl ) \
 		DEF_START                                                 \
-		list_add( var->indices, u32, var->vertices->size );       \
-		list_add( var->indices, u32, var->vertices->size + 1 );   \
-		list_add( var->indices, u32, var->vertices->size + 2 );   \
-		list_add( var->indices, u32, var->vertices->size );       \
-		list_add( var->indices, u32, var->vertices->size + 2 );   \
-		list_add( var->indices, u32, var->vertices->size + 3 );   \
-		list_add( var->vertices, vertex_struct, tl );             \
-		list_add( var->vertices, vertex_struct, tr );             \
-		list_add( var->vertices, vertex_struct, br );             \
-		list_add( var->vertices, vertex_struct, bl );             \
+		mesh_add_tri( var, vertex_struct, tl, tr, br );           \
+		mesh_add_tri( var, vertex_struct, tl, br, bl );           \
 		DEF_END
 
-OBJECT_FN( update, mesh )
+fn update_mesh( in mesh in_mesh )
 {
 	engage_spinlock( in_mesh->lock );
 	if( in_mesh->update )
@@ -1621,57 +1873,30 @@ OBJECT_FN( update, mesh )
 		in_mesh->update = no;
 	}
 	vacate_spinlock( in_mesh->lock );
-	out in_mesh;
 }
 
-OBJECT_FN( draw, mesh )
+fn draw_instanced_mesh( in mesh in_mesh, in u32 in_count )
 {
 	engage_spinlock( in_mesh->lock );
 	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers( current_renderer->command_buffers[ current_renderer->current_frame ], 0, 1, ref( in_mesh->vertex_buffer->device_buff ), offsets );
-	vkCmdBindIndexBuffer( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->index_buffer->device_buff, 0, VK_INDEX_TYPE_UINT32 );
-	vkCmdDrawIndexed( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->indices->size, 1, 0, 0, 0 );
+	vkCmdBindVertexBuffers( current_renderer->command_buffers[ current_renderer->current_frame ], 0, 1, ref( in_mesh->vertex_buffer->buffer ), offsets );
+	vkCmdBindIndexBuffer( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32 );
+	vkCmdDrawIndexed( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->indices->size, in_count, 0, 0, 0 );
 	vacate_spinlock( in_mesh->lock );
-	out in_mesh;
 }
 
-//
-
-fn update_image( in renderer in_renderer, in image in_image )
+fn draw_mesh( in mesh in_mesh )
 {
-	ptr( pure ) mapped = null;
-	vkMapMemory( in_renderer->form->machine->device, in_image->mem, 0, in_image->data->size_type * in_image->data->size, 0, ref( mapped ) );
-	copy_mem( mapped, in_image->data->data, in_image->data->size_type * in_image->data->size );
-	vkUnmapMemory( in_renderer->form->machine->device, in_image->mem );
-
-	VkImageMemoryBarrier barrier = { 0 };
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = in_image->ptr;
-
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-
-	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	barrier.dstAccessMask = 0;
-
-	VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-
-	vkCmdPipelineBarrier( in_renderer->command_buffers[ in_renderer->current_frame ], src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, ref( barrier ) );
+	draw_instanced_mesh( in_mesh, 1 );
 }
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// module
+// module
+// -------
+//
 
 global text default_glsl_vert =
 	"#version 450\n"
@@ -1708,23 +1933,29 @@ global text default_glsl_frag =
 	"    out_rgba = vec4(vert_rgb, 1.);\n"
 	"}";
 
-OBJECT(
+make_object(
 	module,
-	form_module,
-	form_mesh ref_form_mesh;
+	form_shader_stage stage;
+	form_mesh mesh_form;
 	text path;
 	H_shader_module shader_module;
 	os_file file;
 	H_info_pipeline_shader_stage stage_info;
-)
-( in form_module in_form, in text in_path, in form_mesh in_form_mesh )
+)( in form_shader_stage in_stage, in form_mesh in_form_mesh, in text in_path )
 {
-	module result = assign_module( in_form );
+	#ifdef hept_debug
+	print_error( in_stage == null, "module: in_stage is null" );
+	print_error( in_path == null, "module: in_path is null" );
+	print_error( in_stage == null, "module: in_stage is null" );
+	#endif
 	//
-	result->ref_form_mesh = in_form_mesh;
+	module this = assign_module();
+	//
+	this->stage = in_stage;
+	this->mesh_form = in_form_mesh;
 
 	text glsl_name = new_text( in_path, 5 );
-	join_text( glsl_name, ( ( in_form->stage == module_stage_vertex ) ? ( ".vert" ) : ( ".frag" ) ) );
+	join_text( glsl_name, ( ( this->stage->type == shader_stage_type_vertex ) ? ( ".vert" ) : ( ".frag" ) ) );
 
 	text spirv_name = new_text( glsl_name, 4 );
 	join_text( spirv_name, ".spv" );
@@ -1733,51 +1964,60 @@ OBJECT(
 
 	ifn( check_file_exists( glsl_name ) )
 	{
-		write_file( glsl_name, ( ( in_form->stage == module_stage_vertex ) ? ( default_glsl_vert ) : ( default_glsl_frag ) ) );
+		write_file( glsl_name, ( ( this->stage->type == shader_stage_type_vertex ) ? ( default_glsl_vert ) : ( default_glsl_frag ) ) );
 	}
 
 	text command = format_text( "glslangValidator -V %s -o %s", glsl_name, spirv_name );
-	int sys_result = system_command( command );
-	if( sys_result != 0 )
-	{
-		print( "failed to compile GLSL to SPIR-V\n" );
-	}
+	s32 sys_result = system_command( command );
+	#ifdef hept_debug
+	print_error( sys_result != 0, "failed to compile GLSL to SPIR-V\n" );
+	#endif
 
+	this->file = new_os_file( spirv_name );
+
+	H_info_shader_module module_info = H_create_info_shader_module( this->file->data, this->file->size );
+	this->shader_module = H_new_shader_module( current_os_machine->device, module_info );
+	this->stage_info = H_create_info_pipeline_shader_stage( to( VkShaderStageFlagBits, this->stage->type ), this->shader_module, "main" );
 	//
-
-	result->file = new_os_file( spirv_name );
-
-	H_info_shader_module module_info = H_create_info_shader_module( result->file->data, result->file->size );
-	result->shader_module = H_new_shader_module( result->form->machine->device, module_info );
-	result->stage_info = H_create_info_pipeline_shader_stage( result->form->stage, result->shader_module, "main" );
+	#ifdef hept_trace
+	print_trace( "new module" );
+	#endif
 	//
-	out result;
+	out this;
 }
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
 
-/// shader
+// shader_input
+// -------
+// does thing
 
-PTR_PILE(
-	shader_input, (), {}, H_descriptor_pool descriptor_pool;
+make_object(
+	shader_input,
+	H_descriptor_pool descriptor_pool;
 	H_descriptor_set descriptor_set;
-)
-inl shader_input new_shader_input( in form_shader in_form_shader )
+)( in form_shader in_form_shader )
 {
+	#ifdef hept_debug
+	print_error( in_form_shader == null, "shader_input: in_form_shader is null" );
+	#endif
+	//
+	shader_input this = assign_shader_input();
+	//
 	shader_input this_shader_input = assign_shader_input();
 
 	list sizes = new_list( H_descriptor_pool_size );
 	iter_list( in_form_shader->inputs, i )
 	{
 		form_shader_input this_input = list_get( in_form_shader->inputs, form_shader_input, i );
-		list_add( sizes, H_descriptor_pool_size, ( ( H_descriptor_pool_size ){ .type = this_input->descriptor_type, .descriptorCount = 1 } ) );
+		list_add( sizes, H_descriptor_pool_size, ( ( H_descriptor_pool_size ){ .type = to( VkDescriptorType, this_input->type ), .descriptorCount = 1 } ) );
 	}
 
 	H_info_descriptor_pool pool_info = H_create_info_descriptor_pool( 1, sizes->size, ( const ptr( VkDescriptorPoolSize ) )sizes->data, 0 );
 
-	this_shader_input->descriptor_pool = H_new_descriptor_pool( in_form_shader->machine->device, pool_info );
+	this_shader_input->descriptor_pool = H_new_descriptor_pool( current_os_machine->device, pool_info );
 
 	H_info_descriptor_set alloc_info = H_create_info_descriptor_set(
 		this_shader_input->descriptor_pool,
@@ -1785,37 +2025,62 @@ inl shader_input new_shader_input( in form_shader in_form_shader )
 		ref( in_form_shader->descriptor_layout )
 	);
 
-	this_shader_input->descriptor_set = H_new_descriptor_set( in_form_shader->machine->device, alloc_info );
+	this_shader_input->descriptor_set = H_new_descriptor_set( current_os_machine->device, alloc_info );
 
-	// vkAllocateDescriptorSets( in_form_shader->machine->device, ref( alloc_info ), ref( this_shader_input->descriptor_set ) );
-
-	out this_shader_input;
+	//
+	#ifdef hept_trace
+	print_trace( "new shader_input" );
+	#endif
+	//
+	out this;
 }
 
-OBJECT(
+fn update_shader_input_storage( in s32 in_binding, in os_machine in_os_machine, in shader_input in_shader_input, in buffer in_buffer )
+{
+	H_update_descriptor_set_storage( in_binding, in_os_machine->device, in_shader_input->descriptor_set, in_buffer->buffer, in_buffer->size );
+}
+
+fn update_shader_input_image( in s32 in_binding, in os_machine in_os_machine, in shader_input in_shader_input, in image in_image )
+{
+	H_update_descriptor_set_image( in_binding, in_os_machine->device, in_shader_input->descriptor_set, in_image->form->sampler, in_image->view );
+}
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// shader
+// -------
+// does thing
+
+make_object(
 	shader,
-	form_shader,
-	form_frame ref_form_frame;
+	form_shader form;
+	form_frame frame_form;
 	H_pipeline pipeline;
 	H_pipeline_layout pipeline_layout;
-	// H_descriptor_set descriptor_set;
 	list modules;
-)
-( in form_shader in_form, in form_frame in_form_frame, in list in_modules )
+)( in form_shader in_form, in form_frame in_form_frame, in list in_modules )
 {
-	shader result = assign_shader( in_form );
+	#ifdef hept_debug
+	print_error( in_form == null, "shader: in_form is null" );
+	print_error( in_form_frame == null, "shader: in_form_frame is null" );
+	#endif
 	//
-	result->ref_form_frame = in_form_frame;
-	result->modules = in_modules;
+	shader this = assign_shader();
+	//
+	this->form = in_form;
+	this->frame_form = in_form_frame;
+	this->modules = in_modules;
 	//
 	form_mesh vert_form_mesh = null;
-	ptr( H_info_pipeline_shader_stage ) stages = new_mem( H_info_pipeline_shader_stage, result->modules->size );
-	iter_list( result->modules, m )
+	ptr( H_info_pipeline_shader_stage ) stages = new_mem( H_info_pipeline_shader_stage, this->modules->size );
+	iter_list( this->modules, m )
 	{
-		module this_module = list_get( result->modules, module, m );
-		if( this_module->form->stage == module_stage_vertex )
+		module this_module = list_get( this->modules, module, m );
+		if( this_module->stage->type == shader_stage_type_vertex )
 		{
-			vert_form_mesh = this_module->ref_form_mesh;
+			vert_form_mesh = this_module->mesh_form;
 		}
 
 		stages[ m ] = this_module->stage_info;
@@ -1845,8 +2110,7 @@ OBJECT(
 
 	//
 
-	H_info_pipeline_assembly pipeline_input_assembly_info =
-		H_create_info_pipeline_assembly( result->form->topology );
+	H_info_pipeline_assembly pipeline_input_assembly_info = H_create_info_pipeline_assembly( this->form->topology );
 
 	//
 
@@ -1895,9 +2159,9 @@ OBJECT(
 		.pDynamicStates = ( VkDynamicState[] ){VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR}
 	};
 
-	H_info_pipeline_layout info_pipeline_layout = H_create_info_pipeline_layout( 1, ref( result->form->descriptor_layout ), 0, null );
+	H_info_pipeline_layout info_pipeline_layout = H_create_info_pipeline_layout( 1, ref( this->form->descriptor_layout ), 0, null );
 
-	result->pipeline_layout = H_new_pipeline_layout( result->form->machine->device, info_pipeline_layout );
+	this->pipeline_layout = H_new_pipeline_layout( current_os_machine->device, info_pipeline_layout );
 
 	//
 	H_scissor scissor = { 0 };
@@ -1910,7 +2174,7 @@ OBJECT(
 	//
 
 	H_info_pipeline pipeline_info = H_create_info_pipeline(
-		result->modules->size,
+		this->modules->size,
 		stages,
 		ref( pipeline_vertex_info ),
 		ref( pipeline_input_assembly_info ),
@@ -1921,8 +2185,8 @@ OBJECT(
 		ref( depth_stencil ),
 		ref( colorBlending ),
 		ref( dynamic_state_info ),
-		result->pipeline_layout,
-		result->ref_form_frame->render_pass,
+		this->pipeline_layout,
+		this->frame_form->render_pass,
 		0,
 		null,
 		0
@@ -1933,20 +2197,26 @@ OBJECT(
 	// derivedPipelineInfo.basePipelineHandle = basePipeline;
 	// derivedPipelineInfo.basePipelineIndex = -1;
 
-	result->pipeline = H_new_pipeline( result->form->machine->device, pipeline_info );
+	this->pipeline = H_new_pipeline( current_os_machine->device, pipeline_info );
 
 	//
 
 	free_mem( stages );
 	//
-	out result;
+	#ifdef hept_trace
+	print_trace( "new shader" );
+	#endif
+	//
+	out this;
 }
 
-global shader shader_2d = null;
+global shader default_shader_2d_tri = null;
+global shader default_shader_2d_line = null;
+global shader default_shader_3d = null;
 
 fn start_shader( in shader in_shader, in u32 in_width, in u32 in_height )
 {
-	set_shader( in_shader );
+	set_current_shader( in_shader );
 
 	H_scissor scissor = { 0 };
 	scissor.offset = ( VkOffset2D ){ 0, 0 };
@@ -1967,6 +2237,11 @@ fn start_shader( in shader in_shader, in u32 in_width, in u32 in_height )
 	vkCmdBindPipeline( current_renderer->command_buffers[ current_renderer->current_frame ], VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline );
 }
 
+fn use_shader_input( in shader_input in_shader_input )
+{
+	vkCmdBindDescriptorSets( current_renderer->command_buffers[ current_renderer->current_frame ], VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline_layout, 0, 1, ref( in_shader_input->descriptor_set ), 0, NULL );
+}
+
 fn end_shader()
 {
 	vkCmdEndRenderPass( current_renderer->command_buffers[ current_renderer->current_frame ] );
@@ -1974,88 +2249,21 @@ fn end_shader()
 
 //
 
-fn update_shader_input_image( in os_machine in_os_machine, in shader_input in_shader_input, in image in_image )
-{
-	update_descriptor_set_image( in_os_machine->device, in_shader_input->descriptor_set, in_image->form->sampler, in_image->view );
-}
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
 
-fn use_shader_input( in shader_input in_shader_input )
-{
-	vkCmdBindDescriptorSets( current_renderer->command_buffers[ current_renderer->current_frame ], VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline_layout, 0, 1, ref( in_shader_input->descriptor_set ), 0, NULL );
-}
+global s32 main_width = 0;
+global s32 main_height = 0;
+fn_ptr( main_fn_command, pure, pure ) = null;
+
+fn main_init();
 
 //
-
-/////// /////// /////// /////// /////// /////// ///////
-
-OBJECT(
-	event,
-	form_event,
-	list functions;
-)
-( in form_event in_form, in list in_functions )
-{
-	event result = assign_event( in_form );
-	//
-	result->functions = in_functions;
-	//
-	out result;
-}
-	#define new_event( always_or_once, list_of_functions ) new_event( default_form_event_##always_or_once, list_of_functions )
-make_type( fn_ptr( ( fn_event ), pure ) );
-
-inl event perform_event( in event in_event )
-{
-	iter_list( in_event->functions, f )
-	{
-		list_get( in_event->functions, fn_event, f )();
-	}
-	// if(in_event->form->type == event_type_once)
-	out in_event;
-}
-
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-
-/////// /////// /////// /////// /////// /////// ///////
-
-/// global defaults
-
-global os_core default_os_core = null;
-global os_machine default_os_machine = null;
-global os_window default_os_window = null;
-global os_thread default_os_thread = null;
-
-global form_image default_form_image_rgba = null;
-global form_frame default_form_frame = null;
-global form_renderer default_form_renderer = null;
-global form_shader default_form_shader_2d_tri = null;
-global shader_input default_shader_input_2d = null;
-global shader_input default_shader_input_2d2 = null;
-global form_event default_form_event_always = null;
-global form_event default_form_event_once = null;
-
-/////// /////// /////// /////// /////// /////// ///////
-
-/// main setup
-
-fn main_init( in os_machine in_machine );
-
-//
-
-global flag EXIT_HEPT = no;
-
-global u32 main_window_width = 640;
-global u32 main_window_height = 360;
-
-//
-
-/// global piles update
 
 fn main_update_os_machines()
 {
@@ -2068,10 +2276,9 @@ fn main_update_os_machines()
 		//
 		this_machine->queue_family_index = u32_max;
 
-		u32 physical_devices_count = 0;
-		vkEnumeratePhysicalDevices( this_machine->core->instance, ref( physical_devices_count ), null );
+		u32 physical_devices_count = H_get_physical_devices( current_os_core->instance, null );
 		ptr( H_physical_device ) physical_devices = new_mem( H_physical_device, physical_devices_count );
-		vkEnumeratePhysicalDevices( this_machine->core->instance, ref( physical_devices_count ), physical_devices );
+		H_get_physical_devices( current_os_core->instance, physical_devices );
 
 		H_physical_device integrated = null;
 		iter( physical_devices_count, i )
@@ -2081,21 +2288,24 @@ fn main_update_os_machines()
 
 			if( dev_prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU or dev_prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU )
 			{
-				u32 queue_family_n = 0;
-				vkGetPhysicalDeviceQueueFamilyProperties( physical_devices[ i ], ref( queue_family_n ), null );
-				ptr( VkQueueFamilyProperties ) queue_family_prop = new_mem( VkQueueFamilyProperties, queue_family_n );
-				vkGetPhysicalDeviceQueueFamilyProperties( physical_devices[ i ], ref( queue_family_n ), queue_family_prop );
-				iter( queue_family_n, j )
+				u32 queue_family_count = H_get_physical_device_queue_properties( physical_devices[ i ], null );
+				ptr( VkQueueFamilyProperties ) queue_family_properties = new_mem( VkQueueFamilyProperties, queue_family_count );
+				H_get_physical_device_queue_properties( physical_devices[ i ], queue_family_properties );
+
+				iter( queue_family_count, j )
 				{
 					this_machine->queue_family_index = j;
-					VkBool32 support_present;
+					u32 support_present;
 					vkGetPhysicalDeviceSurfaceSupportKHR( physical_devices[ i ], j, current_os_window->surface, ref( support_present ) );
 
-					if( ( queue_family_prop[ j ].queueFlags & VK_QUEUE_GRAPHICS_BIT ) and ( queue_family_prop[ j ].queueFlags & VK_QUEUE_COMPUTE_BIT ) and support_present )
+					if( ( queue_family_properties[ j ].queueFlags & VK_QUEUE_GRAPHICS_BIT ) and ( queue_family_properties[ j ].queueFlags & VK_QUEUE_COMPUTE_BIT ) and support_present )
 					{
 						if( dev_prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU )
 						{
 							this_machine->physical_device = physical_devices[ i ];
+	#ifdef hept_debug
+							print_debug( "GPU name: %s", dev_prop.deviceName );
+	#endif
 							skip;
 						}
 						elif( integrated == null )
@@ -2104,7 +2314,7 @@ fn main_update_os_machines()
 						}
 					}
 				}
-				free_mem( queue_family_prop );
+				free_mem( queue_family_properties );
 			}
 
 			if( this_machine->physical_device != null )
@@ -2116,30 +2326,30 @@ fn main_update_os_machines()
 
 		if( this_machine->physical_device == null )
 		{
-			if( integrated != null )
-			{
-				this_machine->physical_device = integrated;
-			}
-			else
-			{
-				print( "Failed to find a suitable GPU\n" );
-			}
+			this_machine->physical_device = integrated;
+	#ifdef hept_debug
+			print_error( this_machine->physical_device == null, "main_update_os_machines: could not find GPU" );
+	#endif
 		}
 
 		f32 queue_priority = 1.0f;
 		H_info_device_queue device_queue = H_create_info_device_queue( this_machine->queue_family_index, 1, ref( queue_priority ) );
 
-		H_physical_device_features features;
-		vkGetPhysicalDeviceFeatures( this_machine->physical_device, ref( features ) );
+		H_physical_device_features features = H_get_physical_device_features( this_machine->physical_device );
 
 		//
 
-		text device_ext[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		H_info_device info_device = H_create_info_device( 1, ref( device_queue ), 0, null, 1, ( ptr( const char ) ptr( const ) )device_ext, ref( features ) );
+		text extensions[] = {
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+		u32 extension_count = 1;
+
+		H_info_device info_device = H_create_info_device( 1, ref( device_queue ), 0, null, extension_count, ( ptr( const char ) ptr( const ) )extensions, ref( features ) );
 
 		this_machine->device = H_new_device( this_machine->physical_device, info_device );
 	}
 }
+
+//
 
 fn main_update_os_windows()
 {
@@ -2158,7 +2368,7 @@ fn main_update_os_windows()
 		{
 			if( msg.message == 0x0012 )
 			{
-				EXIT_HEPT = yes;
+				hept_exit = yes;
 				out;
 			}
 			else
@@ -2169,7 +2379,7 @@ fn main_update_os_windows()
 		}
 
 	#elif OS_LINUX
-		process_os_window( this_window->xdis );
+		process_os_window( this_window->link.xdis, this_window->link.xwin );
 	#endif
 
 		//
@@ -2187,9 +2397,9 @@ fn main_update_os_windows()
 		vkGetPhysicalDeviceSurfacePresentModesKHR( current_os_machine->physical_device, this_window->surface, ref( present_mode_n ), present_modes );
 		iter( present_mode_n, i )
 		{
-			if( present_modes[ i ] == H_present_mode_vsync_optimal )
+			if( present_modes[ i ] == H_present_mode_vsync_off )
 			{
-				this_window->present_mode = H_present_mode_vsync_optimal;
+				this_window->present_mode = H_present_mode_vsync_off;
 				skip;
 			}
 		}
@@ -2206,7 +2416,7 @@ fn main_update_os_windows()
 		}
 		else
 		{
-			new_renderer( default_form_renderer, this_window, main_window_width, main_window_height );
+			new_renderer( default_form_renderer, this_window, main_width, main_height );
 			this_window->ready = yes;
 		}
 	}
@@ -2222,29 +2432,29 @@ fn main_update_renderers()
 		ifn( maybe_renderer.valid ) next;
 
 		renderer this_renderer = cast( maybe_renderer.value, renderer );
-		set_renderer( this_renderer );
+		set_current_renderer( this_renderer );
 
 		//
 
-		if( this_renderer->changed ) refresh_renderer( this_renderer );
+		if( this_renderer->changed ) update_renderer( this_renderer );
 
 		//
 
 		{
-			vkWaitForFences( this_renderer->form->machine->device, 1, ref( this_renderer->flight_fences[ this_renderer->fence_id ] ), VK_TRUE, UINT64_MAX );
+			vkWaitForFences( current_os_machine->device, 1, ref( this_renderer->flight_fences[ this_renderer->fence_id ] ), VK_TRUE, UINT64_MAX );
 
 			VkResult aquire_result = vkAcquireNextImageKHR(
-				this_renderer->form->machine->device, this_renderer->swapchain, UINT64_MAX, this_renderer->image_ready[ this_renderer->current_frame ], VK_NULL_HANDLE, ref( this_renderer->current_frame )
+				current_os_machine->device, this_renderer->swapchain, UINT64_MAX, this_renderer->image_ready[ this_renderer->current_frame ], VK_NULL_HANDLE, ref( this_renderer->current_frame )
 			);
 
 			if( aquire_result == VK_ERROR_OUT_OF_DATE_KHR || aquire_result == VK_SUBOPTIMAL_KHR )
 			{
-				refresh_renderer( this_renderer );
+				update_renderer( this_renderer );
 				main_update_renderers();
 				next;
 			}
 
-			vkResetFences( this_renderer->form->machine->device, 1, ref( this_renderer->flight_fences[ this_renderer->fence_id ] ) );
+			vkResetFences( current_os_machine->device, 1, ref( this_renderer->flight_fences[ this_renderer->fence_id ] ) );
 
 			this_renderer->fence_id = ( this_renderer->current_frame + 1 ) % this_renderer->frames->size;
 		}
@@ -2266,33 +2476,26 @@ fn main_update_renderers()
 
 		iter_list( list_update_mesh, m )
 		{
-			mesh this_mesh = list_get( list_update_mesh, mesh, m );
+			mesh this_mesh = list_pop_front( list_update_mesh, mesh );
 			engage_spinlock( this_mesh->lock );
 			if( this_mesh->vertex_buffer == null )
 			{
-				this_mesh->vertex_buffer = new_buffer( form_buffer_vertex, this_mesh->form->type_size * this_mesh->vertices->size );
+				this_mesh->vertex_buffer = new_buffer( default_form_buffer_vertex, this_mesh->form->type_size * this_mesh->vertices->size );
 			}
 
 			if( this_mesh->index_buffer == null )
 			{
-				this_mesh->index_buffer = new_buffer( form_buffer_index, size_u32 * this_mesh->indices->size );
+				this_mesh->index_buffer = new_buffer( default_form_buffer_index, size_u32 * this_mesh->indices->size );
 			}
-			// vkCmdUpdateBuffer( this_renderer->command_buffers[ this_renderer->current_frame ], this_mesh->vertex_buffer->device_buff, 0, this_mesh->form->type_size * this_mesh->vertices->size, this_mesh->vertices->data );
-			// vkCmdUpdateBuffer( this_renderer->command_buffers[ this_renderer->current_frame ], this_mesh->index_buffer->device_buff, 0, size_u32 * this_mesh->indices->size, this_mesh->indices->data );
-
-			void* mappedMemory;
-			vkMapMemory( this_renderer->form->machine->device, this_mesh->vertex_buffer->device_mem, 0, this_mesh->form->type_size * this_mesh->vertices->size, 0, &mappedMemory );
-			copy_mem( mappedMemory, this_mesh->vertices->data, this_mesh->form->type_size * this_mesh->vertices->size );
-			vkUnmapMemory( this_renderer->form->machine->device, this_mesh->vertex_buffer->device_mem );
-			//
-			vkMapMemory( this_renderer->form->machine->device, this_mesh->index_buffer->device_mem, 0, size_u32 * this_mesh->indices->size, 0, &mappedMemory );
-			copy_mem( mappedMemory, this_mesh->indices->data, size_u32 * this_mesh->indices->size );
-			vkUnmapMemory( this_renderer->form->machine->device, this_mesh->index_buffer->device_mem );
-
+			update_buffer( this_mesh->vertex_buffer, this_mesh->vertices->data );
+			update_buffer( this_mesh->index_buffer, this_mesh->indices->data );
+			print( "update\n" );
 			vacate_spinlock( this_mesh->lock );
 		}
 
 		//
+
+		set_current_frame( current_renderer->frame_window );
 
 		this_renderer->ref_window->render_fn();
 
@@ -2310,7 +2513,7 @@ fn main_update_renderers()
 				barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 				barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 				barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				barrier.image = temp_image->ptr;
+				barrier.image = temp_image->image;
 
 				barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 				barrier.subresourceRange.baseMipLevel = 0;
@@ -2328,7 +2531,7 @@ fn main_update_renderers()
 
 				barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 				barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-				barrier.image = this_image->ptr;
+				barrier.image = this_image->image;
 				barrier.srcAccessMask = 0;
 				barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 				src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -2339,7 +2542,7 @@ fn main_update_renderers()
 
 			//
 
-			float aspectRatioTemp = to_f32( main_window_width ) / to_f32( main_window_height );
+			float aspectRatioTemp = to_f32( main_width ) / to_f32( main_height );
 			float aspectRatioSwapchain = ( float )this_renderer->swapchain_extent.width / ( float )this_renderer->swapchain_extent.height;
 
 			uint32_t dstWidth, dstHeight;
@@ -2361,7 +2564,7 @@ fn main_update_renderers()
 
 			VkImageBlit blit = { 0 };
 			blit.srcOffsets[ 0 ] = ( H_offset_3d ){ 0, 0, 0 };
-			blit.srcOffsets[ 1 ] = ( H_offset_3d ){ main_window_width, main_window_height, 1 };
+			blit.srcOffsets[ 1 ] = ( H_offset_3d ){ main_width, main_height, 1 };
 			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			blit.srcSubresource.mipLevel = 0;
 			blit.srcSubresource.baseArrayLayer = 0;
@@ -2376,9 +2579,9 @@ fn main_update_renderers()
 
 			vkCmdBlitImage(
 				this_renderer->command_buffers[ this_renderer->current_frame ],
-				temp_image->ptr,
+				temp_image->image,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				this_image->ptr,
+				this_image->image,
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				1,
 				ref( blit ),
@@ -2394,7 +2597,7 @@ fn main_update_renderers()
 			barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.image = this_image->ptr;
+			barrier.image = this_image->image;
 
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			barrier.subresourceRange.baseMipLevel = 0;
@@ -2438,7 +2641,7 @@ fn main_update_renderers()
 
 		if( present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR )
 		{
-			refresh_renderer( this_renderer );
+			update_renderer( this_renderer );
 			main_update_renderers();
 			next;
 		}
@@ -2449,369 +2652,63 @@ fn main_update_renderers()
 
 //
 
-fn main_update_events()
-{
-	iter_pile( pile_event, e )
-	{
-		maybe maybe_event = pile_find( pile_event, event, e );
-		ifn( maybe_event.valid ) next;
-
-		event this_event = to( event, maybe_event.value );
-		set_event( this_event );
-		//
-
-		perform_event( this_event );
-	}
-}
-
-//
-
-/////// /////// /////// /////// /////// /////// ///////
-
-/// step thread
-
-fn reset_button_events()
-{
-	iter_list( os_inputs_active, i )
-	{
-		os_button button = to( os_button, safe_ptr_get( list_get( os_inputs_active, os_button, 0 ) ) );
-		list_shift( os_inputs_active, -1 );
-		safe_u8_set( button->pressed, no );
-		safe_u8_set( button->released, no );
-	}
-}
-
-global os_timer timer_main_thread = null;
-
-inl ptr( pure ) main_thread( in ptr( pure ) in_ptr )
-{
-	timer_main_thread = new_os_timer( 120 );
-	loop
-	{
-		if( EXIT_HEPT ) out null;
-		start_os_timer( timer_main_thread );
-		main_update_events();
-		reset_button_events();
-		if( EXIT_HEPT ) out null;
-		wait_os_timer( timer_main_thread );
-	}
-}
-
-//
-
-/////// /////// /////// /////// /////// /////// ///////
-
-/// hept setup
-
-fn hept_forms( in os_machine in_machine )
-{
-	//
-	form_mesh_attrib_pos2 = new_form_mesh_attrib( f32, 2 );
-	form_mesh_attrib_pos3 = new_form_mesh_attrib( f32, 3 );
-	form_mesh_attrib_uv = new_form_mesh_attrib( f32, 2 );
-	form_mesh_attrib_rgb = new_form_mesh_attrib( f32, 3 );
-	form_mesh_attrib_rgba = new_form_mesh_attrib( f32, 4 );
-	//
-	list attribs_2d = new_list( form_mesh_attrib );
-	list_add( attribs_2d, form_mesh_attrib, form_mesh_attrib_pos2 );
-	list_add( attribs_2d, form_mesh_attrib, form_mesh_attrib_uv );
-	list_add( attribs_2d, form_mesh_attrib, form_mesh_attrib_rgb );
-	form_mesh_2d = new_form_mesh( in_machine, attribs_2d, yes );
-	//
-	list_update_mesh = new_list( mesh );
-	//
-	form_buffer_vertex = new_form_buffer(
-		in_machine,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, // H_set_flags( H_buffer_usage_vertex, H_buffer_usage_transfer_dst),
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-	);
-	form_buffer_index = new_form_buffer(
-		in_machine,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, // H_set_flags( H_buffer_usage_index, H_buffer_usage_transfer_dst),
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-	);
-}
-
-fn hept_defaults( in os_machine in_machine )
-{
-	list layers = new_list( form_frame_layer );
-	list_add( layers, form_frame_layer, new_form_frame_layer( frame_layer_type_rgba ) );
-	default_form_image_rgba = new_form_image( current_os_machine, image_type_rgba, VK_FORMAT_R8G8B8A8_UNORM );
-	default_form_frame = new_form_frame( in_machine, frame_type_general, VK_FORMAT_B8G8R8A8_UNORM, layers );
-	default_form_renderer = new_form_renderer( in_machine );
-	default_form_event_always = new_form_event( default_os_machine, event_type_always );
-	default_form_event_once = new_form_event( default_os_machine, event_type_once );
-	default_os_thread = new_os_thread( main_thread );
-}
-
-fn hept_init( in os_machine in_machine )
-{
-	main_update_os_machines();
-	//
-	hept_defaults( in_machine );
-	//
-	mesh_square = new_mesh( form_mesh_2d );
-	mesh_add_quad(
-		mesh_square,
-		struct( vertex_2d ),
-		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f ),
-		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f ),
-		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f ),
-		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f )
-	);
-	update_mesh( mesh_square );
-	//
-	form_module form_module_vert = new_form_module( in_machine, module_stage_vertex );
-	form_module form_module_geom = new_form_module( in_machine, module_stage_geometry );
-	form_module form_module_frag = new_form_module( in_machine, module_stage_fragment );
-	form_module form_module_comp = new_form_module( in_machine, module_stage_compute );
-	//
-	module module_2d_vert = new_module( form_module_vert, "default_2d", form_mesh_2d );
-	module module_2d_frag = new_module( form_module_frag, "default_2d", null );
-	//
-	list inputs = new_list( form_shader_input );
-	list_add( inputs, form_shader_input, new_form_shader_input( H_shader_stage_vertex, H_descriptor_type_storage ) );
-	list_add( inputs, form_shader_input, new_form_shader_input( H_shader_stage_fragment, H_descriptor_type_image ) );
-	default_form_shader_2d_tri = new_form_shader( in_machine, H_topology_tri, inputs );
-	//
-	default_shader_input_2d = new_shader_input( default_form_shader_2d_tri );
-	default_shader_input_2d2 = new_shader_input( default_form_shader_2d_tri );
-	//
-	list modules = new_list( module );
-	list_add( modules, module, module_2d_vert );
-	list_add( modules, module, module_2d_frag );
-	shader_2d = new_shader( default_form_shader_2d_tri, default_form_frame, modules );
-}
-
-fn exit_hept()
-{
-	// delete_pile
-}
-
 fn hept_update()
 {
+	if( hept_exit ) out;
 	main_update_os_windows();
-	if( EXIT_HEPT ) exit_hept();
+	if( hept_exit ) out;
 	main_update_renderers();
 }
 
-fn os_step( in os_machine in_machine )
-{
-	//
-}
-
-fn hept_piles()
-{
-	// os
-	pile_os_core = new_pile( os_core );
-	pile_os_file = new_pile( os_file );
-	pile_os_timer = new_pile( os_timer );
-	pile_os_thread = new_pile( os_thread );
-	pile_os_window = new_pile( os_window );
-	pile_os_machine = new_pile( os_machine );
-	// form
-	pile_form_buffer = new_pile( form_buffer );
-	pile_form_mesh_attrib = new_pile( form_mesh_attrib );
-	pile_form_mesh = new_pile( form_mesh );
-	pile_form_image = new_pile( form_image );
-	pile_form_frame_layer = new_pile( form_frame_layer );
-	pile_form_frame = new_pile( form_frame );
-	pile_form_renderer = new_pile( form_renderer );
-	pile_form_module = new_pile( form_module );
-	pile_form_shader_input = new_pile( form_shader_input );
-	pile_form_shader = new_pile( form_shader );
-	pile_form_event = new_pile( form_event );
-	// object
-	pile_buffer = new_pile( buffer );
-	pile_mesh = new_pile( mesh );
-	pile_image = new_pile( image );
-	pile_frame = new_pile( frame );
-	pile_renderer = new_pile( renderer );
-	pile_module = new_pile( module );
-	pile_shader_input = new_pile( shader_input );
-	pile_shader = new_pile( shader );
-	pile_event = new_pile( event );
-}
-
 //
 
-	#define get_key( _ )
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
 
-	#define pressed_key( _ ) safe_u8_get( ( list_get( os_inputs, os_button, os_key[ ( _ ) ] ) )->pressed )
-	#define held_key( _ ) ( safe_u32_get( ( list_get( os_inputs, os_button, os_key[ ( _ ) ] ) )->down ) > 0 )
-	#define released_key( _ ) safe_u8_get( ( list_get( os_inputs, os_button, os_key[ ( _ ) ] ) )->released )
+// os_window call-back function for window events + input
 
 	#if OS_WINDOWS
 inl LRESULT CALLBACK process_os_window( HWND hwnd, UINT u_msg, WPARAM w_param, LPARAM l_param )
 {
-	//
+	uint32_t custom_key;
 
 	switch( u_msg )
 	{
 	case WM_DESTROY:
-		EXIT_HEPT = yes;
+		hept_exit = yes;
 		return 0;
-	case WM_SIZE:
-		refresh_renderer( current_renderer );
-		hept_update();
-		return 1;
-
-	case WM_KEYDOWN:
-	case WM_SYSKEYDOWN:
-		{
-			os_button button = null;
-			if( os_key[ w_param ] == 0 )
-			{
-				os_key[ w_param ] = os_inputs->size;
-				button = new_mem( struct( os_button ), 1 );
-				list_add( os_inputs, os_button, button );
-			}
-			else
-			{
-				button = list_get( os_inputs, os_button, os_key[ w_param ] );
-			}
-
-			if( button->down == 0 )
-			{
-				button->pressed = yes;
-				list_add( os_inputs_active, os_button, button );
-			}
-			button->down++;
-			break;
-		}
-
-	case WM_KEYUP:
-	case WM_SYSKEYUP:
-		{
-			if( os_key[ w_param ] != 0 )
-			{
-				os_button button = list_get( os_inputs, os_button, os_key[ w_param ] );
-				if( button->down > 0 )
-				{
-					button->released = yes;
-					list_add( os_inputs_active, os_button, button );
-				}
-				button->down = 0;
-			}
-			break;
-		}
-
-	case WM_LBUTTONDOWN:
-		// handle_button_event( &mouse.left_button, yes );
-		break;
-	/*case WM_RBUTTONDOWN:
-	handle_button_event( &mouse.right_button, yes );
-	break;
-	case WM_MBUTTONDOWN:
-	handle_button_event( &mouse.middle_button, yes );
-	break;
-	case WM_LBUTTONUP:
-	handle_button_event( &mouse.left_button, no );
-	break;
-	case WM_RBUTTONUP:
-	handle_button_event( &mouse.right_button, no );
-	break;
-	case WM_MBUTTONUP:
-	handle_button_event( &mouse.middle_button, no );
-	break;
-	case WM_MOUSEMOVE:
-	mouse.x = LOWORD( l_param );
-	mouse.y = HIWORD( l_param );
-	break;*/
 	default:
 		return DefWindowProc( hwnd, u_msg, w_param, l_param );
 	}
 	return 0;
 }
 	#elif OS_LINUX
-void process_os_window( Display* in_disp )
+void process_os_window( ptr( Display ) in_disp, Window in_win )
 {
 	XEvent e;
-
+	u32 custom_key;
 	as( XPending( in_disp ) )
 	{
-		XNextEvent( in_disp, &e );
+		XNextEvent( in_disp, ref( e ) );
 
 		with( e.type )
 		{
-			is( Expose )
+			is( DestroyNotify )
 			{
-				refresh_renderer( current_renderer );
+				hept_exit = yes;
+				out;
+			}
+			is( ConfigureNotify )
+			{
+				update_renderer( current_renderer );
 				hept_update();
-				skip;
+				out;
 			}
-
-			is( KeyPress )
-			{
-				u32 key = XLookupKeysym( &e.xkey, 0 );
-
-				if( key >= 256 ) key = __clamp_key( key );
-
-				os_button button = null;
-				if( safe_u32_get( os_key[ key ] ) == 0 )
-				{
-					safe_u32_set( os_key[ key ], os_inputs->size );
-					button = new_mem( struct( os_button ), 1 );
-					list_safe_add( os_inputs, os_button, button );
-				}
-				else
-				{
-					button = safe_ptr_get( list_get( os_inputs, os_button, os_key[ key ] ) );
-				}
-
-				if( safe_u32_get( button->pressed ) == no and safe_u32_get( button->down ) == 0 )
-				{
-					safe_u8_set( button->pressed, yes );
-					list_safe_add( os_inputs_active, os_button, button );
-				}
-				safe_u32_inc( button->down );
-				skip;
-			}
-
-			is( KeyRelease )
-			{
-				u32 key = XLookupKeysym( &e.xkey, 0 );
-
-				if( key >= 256 ) key = __clamp_key( key );
-
-				if( safe_u32_get( os_key[ key ] ) != 0 )
-				{
-					os_button button = safe_ptr_get( list_get( os_inputs, os_button, os_key[ key ] ) );
-					safe_u8_set( button->pressed, no );
-					if( safe_u32_get( button->down ) > 0 ) safe_u8_set( button->released, yes );
-					safe_u32_set( button->down, 0 );
-					list_safe_add( os_inputs_active, os_button, button );
-				}
-				skip;
-			}
-
-			/*	break;
-			case KeyPress:
-			handle_button_event( &keys[ XLookupKeysym( &e.xkey, 0 ) ], yes );
-			break;
-			case KeyRelease:
-			handle_button_event( &keys[ XLookupKeysym( &e.xkey, 0 ) ], no );
-			break;
-			case ButtonPress:
-			if( e.xbutton.button == Button1 )
-			handle_button_event( &mouse.left_button, yes );
-			else if( e.xbutton.button == Button2 )
-			handle_button_event( &mouse.middle_button, yes );
-			else if( e.xbutton.button == Button3 )
-			handle_button_event( &mouse.right_button, yes );
-			break;
-			case ButtonRelease:
-			if( e.xbutton.button == Button1 )
-			handle_button_event( &mouse.left_button, no );
-			else if( e.xbutton.button == Button2 )
-			handle_button_event( &mouse.middle_button, no );
-			else if( e.xbutton.button == Button3 )
-			handle_button_event( &mouse.right_button, no );
-			break;
-			case MotionNotify:
-			mouse.x = e.xmotion.x;
-			mouse.y = e.xmotion.y;
-			break;*/
 		}
 	}
 }
@@ -2819,195 +2716,138 @@ void process_os_window( Display* in_disp )
 
 //
 
-	#define main_core                                                                                                    \
-		DEF_START                                                                                                          \
-		os_inputs = new_list( os_button );                                                                                 \
-		os_inputs_active = new_list( os_button );                                                                          \
-		os_button button = new_mem( struct( os_button ), 1 );                                                              \
-		list_add( os_inputs, os_button, button );                                                                          \
-                                                                                                                       \
-		default_os_core = new_os_core( main_core_name );                                                                   \
-		default_os_machine = new_os_machine();                                                                             \
-		default_os_window = new_os_window( main_window_name, main_fn_command, main_window_width, main_window_height, no ); \
-		hept_forms( default_os_machine );                                                                                  \
-                                                                                                                       \
-		hept_init( default_os_machine );                                                                                   \
-		main_init( default_os_machine );                                                                                   \
-                                                                                                                       \
-		loop                                                                                                               \
-		{                                                                                                                  \
-			hept_update();\
-			if(EXIT_HEPT) out 1;                                                                                                   \
-		}                                                                                                                  \
-		DEF_END
-
-//
-
-	#define main( creator_name, window_name, default_width, default_height, fn_command ) \
-		global text main_core_name = creator_name;                                         \
-		global text main_window_name = window_name;                                        \
-		fn_ptr( main_fn_command, pure, pure ) = ( fn_ptr(, pure, pure ) )fn_command;       \
-                                                                                       \
-		int main()                                                                         \
-		{                                                                                  \
-			main_window_width = default_width;                                               \
-			main_window_height = default_height;                                             \
-			hept_piles();                                                                    \
-			main_core;                                                                       \
-			out 0;                                                                           \
-		}                                                                                  \
-		fn main_init( in os_machine in_machine )
-
-	#ifdef COMPILER_MSVC
-	// int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) { return main(); };
-	#endif
-
-//
-
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
 /////// /////// /////// /////// /////// /////// ///////
 
-/// thing
+fn main_defaults()
+{
+	list_update_mesh = new_list( mesh );
+	/////// /////// /////// /////// /////// /////// ///////
+	// default forms
 
-	#define make_thing( NAME, PARTS, ... )               \
-		make_struct( NAME ) PARTS;                         \
-		make_ptr( struct( NAME ) ) NAME;                   \
-		NAME assign_##NAME()                               \
-		{                                                  \
-			NAME this_##NAME = new_mem( struct( NAME ), 1 ); \
-			out this_##NAME;                                 \
-		}                                                  \
-		NAME new_##NAME __VA_ARGS__
+	default_form_buffer_vertex = new_form_buffer(
+		H_buffer_usage_transfer_dst | H_buffer_usage_vertex,
+		H_memory_property_device_local | H_memory_property_host_visible | H_memory_property_host_coherent
+	);
+	default_form_buffer_index = new_form_buffer(
+		H_buffer_usage_transfer_dst | H_buffer_usage_index,
+		H_memory_property_device_local | H_memory_property_host_visible | H_memory_property_host_coherent
+	);
+	default_form_buffer_storage = new_form_buffer(
+		H_buffer_usage_transfer_dst | H_buffer_usage_storage,
+		H_memory_property_device_local | H_memory_property_host_visible | H_memory_property_host_coherent
+	);
+	//
+	default_form_image_rgba = new_form_image( image_type_rgba, VK_FORMAT_B8G8R8A8_UNORM );
+	default_form_image_depth = new_form_image( image_type_depth, VK_FORMAT_D32_SFLOAT );
+	default_form_image_stencil = new_form_image( image_type_stencil, VK_FORMAT_S8_UINT );
+	//
+	default_form_frame_layer_rgba = new_form_frame_layer( frame_layer_type_rgba, VK_FORMAT_B8G8R8A8_UNORM );
+	default_form_frame_layer_depth = new_form_frame_layer( frame_layer_type_depth, VK_FORMAT_D32_SFLOAT );
+	default_form_frame_layer_stencil = new_form_frame_layer( frame_layer_type_stencil, VK_FORMAT_S8_UINT );
+	//
+	list layers = new_list( form_frame_layer );
+	list_add( layers, form_frame_layer, default_form_frame_layer_rgba );
+	default_form_frame = new_form_frame( frame_type_general, layers );
+	//
+	default_form_renderer = new_form_renderer();
+	//
+	default_form_mesh_attrib_pos2 = new_form_mesh_attrib( f32, 2 );
+	default_form_mesh_attrib_pos3 = new_form_mesh_attrib( f32, 3 );
+	default_form_mesh_attrib_uv = new_form_mesh_attrib( f32, 2 );
+	default_form_mesh_attrib_rgb = new_form_mesh_attrib( f32, 3 );
+	default_form_mesh_attrib_rgba = new_form_mesh_attrib( f32, 4 );
+	//
+	list attribs_2d = new_list( form_mesh_attrib );
+	list_add( attribs_2d, form_mesh_attrib, default_form_mesh_attrib_pos2 );
+	list_add( attribs_2d, form_mesh_attrib, default_form_mesh_attrib_uv );
+	list_add( attribs_2d, form_mesh_attrib, default_form_mesh_attrib_rgb );
+	default_form_mesh_2d = new_form_mesh( attribs_2d, yes );
+	list attribs_3d = new_list( form_mesh_attrib );
+	list_add( attribs_3d, form_mesh_attrib, default_form_mesh_attrib_pos3 );
+	list_add( attribs_3d, form_mesh_attrib, default_form_mesh_attrib_uv );
+	list_add( attribs_3d, form_mesh_attrib, default_form_mesh_attrib_rgb );
+	default_form_mesh_3d = new_form_mesh( attribs_3d, yes );
+	//
+	default_form_shader_stage_vert = new_form_shader_stage( shader_stage_type_vertex );
+	default_form_shader_stage_geom = new_form_shader_stage( shader_stage_type_geometry );
+	default_form_shader_stage_frag = new_form_shader_stage( shader_stage_type_fragment );
+	default_form_shader_stage_comp = new_form_shader_stage( shader_stage_type_compute );
+	//
+	default_form_shader_input_image = new_form_shader_input( shader_input_type_image, shader_stage_type_fragment );
+	default_form_shader_input_storage = new_form_shader_input( shader_input_type_image, shader_stage_type_vertex );
+	//
+	list shader_inputs_pixel = new_list( form_shader_input );
+	list_add( shader_inputs_pixel, form_shader_input, default_form_shader_input_storage );
+	// default_form_shader_pixel = new_form_shader( H_topology_pixel, shader_inputs_pixel );
+	list shader_inputs_line = new_list( form_shader_input );
+	list_add( shader_inputs_line, form_shader_input, default_form_shader_input_storage );
+	default_form_shader_line = new_form_shader( H_topology_line, shader_inputs_line );
+	list shader_inputs_tri = new_list( form_shader_input );
+	list_add( shader_inputs_tri, form_shader_input, default_form_shader_input_storage );
+	list_add( shader_inputs_tri, form_shader_input, default_form_shader_input_image );
+	default_form_shader_tri = new_form_shader( H_topology_tri, shader_inputs_tri );
 
-/*
-#define __new_thing( NAME )           \
-NAME new_##NAME()                   \
-{                                   \
-out new_mem( struct( NAME ), 1 ); \
+	/////// /////// /////// /////// /////// /////// ///////
+	// default objects
+
+	buffer default_buffer_storage = new_buffer( default_form_buffer_storage, 64 );
+	//
+	/*default_mesh_square = new_mesh( default_form_mesh_2d );
+	mesh_add_quad(
+		default_mesh_square,
+		struct( vertex_2d ),
+		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f ),
+		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f ),
+		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f ),
+		create_struct_vertex_2d( 0, 0, 0.f, 0.f, 0.f, 1.f, .75f )
+	);
+	update_mesh( default_mesh_square );*/
+	//
+	module module_2d_vert = new_module( default_form_shader_stage_vert, default_form_mesh_2d, "default_2d" );
+	module module_2d_frag = new_module( default_form_shader_stage_frag, null, "default_2d" );
+	//
+	list tri_modules = new_list( module );
+	list_add( tri_modules, module, module_2d_vert );
+	list_add( tri_modules, module, module_2d_frag );
+	default_shader_2d_tri = new_shader( default_form_shader_tri, default_form_frame, tri_modules );
+	list line_modules = new_list( module );
+	list_add( line_modules, module, module_2d_vert );
+	list_add( line_modules, module, module_2d_frag );
+	default_shader_2d_line = new_shader( default_form_shader_line, default_form_frame, line_modules );
 }
 
-#define make_thing( NAME, ... )       \
-make_struct( NAME ) __VA_ARGS__ ; \
-make_ptr( struct( NAME ) ) NAME;    \
-__new_thing( NAME );                \
-global NAME default_##NAME = null;
-*/
+//
+
+	#define main( CREATOR_NAME, WINDOW_NAME, WIDTH, HEIGHT, FN_COMMAND )               \
+		global text main_creator_name = CREATOR_NAME;                                    \
+		global text main_window_name = WINDOW_NAME;                                      \
+                                                                                     \
+		int main()                                                                       \
+		{                                                                                \
+			main_width = WIDTH;                                                            \
+			main_height = HEIGHT;                                                          \
+			main_fn_command = to( fn_ptr(, pure, pure ), FN_COMMAND );                     \
+			{                                                                              \
+				list_object_piles = new_list( pile );                                        \
+				new_os_core( main_creator_name );                                            \
+				new_os_machine();                                                            \
+				new_os_window( main_window_name, main_width, main_height, main_fn_command ); \
+			}                                                                              \
+			main_update_os_machines();                                                     \
+			main_defaults();                                                               \
+			main_init();                                                                   \
+			loop                                                                           \
+			{                                                                              \
+				hept_update();                                                               \
+				if( hept_exit ) out 0;                                                       \
+			}                                                                              \
+			out 0;                                                                         \
+		}                                                                                \
+		fn main_init()
 
 //
 
 /////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-/////// /////// /////// /////// /////// /////// ///////
-
-//
-
-/// keycodes
-
-	#if OS_WINDOWS
-		#define key_a 'A'
-		#define key_b 'B'
-		#define key_c 'C'
-		#define key_d 'D'
-		#define key_e 'E'
-		#define key_f 'F'
-		#define key_g 'G'
-		#define key_h 'H'
-		#define key_i 'I'
-		#define key_j 'J'
-		#define key_k 'K'
-		#define key_l 'L'
-		#define key_m 'M'
-		#define key_n 'N'
-		#define key_o 'O'
-		#define key_p 'P'
-		#define key_q 'Q'
-		#define key_r 'R'
-		#define key_s 'S'
-		#define key_t 'T'
-		#define key_u 'U'
-		#define key_v 'V'
-		#define key_w 'W'
-		#define key_x 'X'
-		#define key_y 'Y'
-		#define key_z 'Z'
-		#define key_0 '0'
-		#define key_1 '1'
-		#define key_2 '2'
-		#define key_3 '3'
-		#define key_4 '4'
-		#define key_5 '5'
-		#define key_6 '6'
-		#define key_7 '7'
-		#define key_8 '8'
-		#define key_9 '9'
-		#define key_backspace VK_BACK
-		#define key_tab VK_TAB
-		#define key_return VK_RETURN
-		#define key_escape VK_ESCAPE
-		#define key_space VK_SPACE
-		#define key_up VK_UP
-		#define key_down VK_DOWN
-		#define key_left VK_LEFT
-		#define key_right VK_RIGHT
-	#elif OS_LINUX
-		#define key_a XK_a
-		#define key_b XK_b
-		#define key_c XK_c
-		#define key_d XK_d
-		#define key_e XK_e
-		#define key_f XK_f
-		#define key_g XK_g
-		#define key_h XK_h
-		#define key_i XK_i
-		#define key_j XK_j
-		#define key_k XK_k
-		#define key_l XK_l
-		#define key_m XK_m
-		#define key_n XK_n
-		#define key_o XK_o
-		#define key_p XK_p
-		#define key_q XK_q
-		#define key_r XK_r
-		#define key_s XK_s
-		#define key_t XK_t
-		#define key_u XK_u
-		#define key_v XK_v
-		#define key_w XK_w
-		#define key_x XK_x
-		#define key_y XK_y
-		#define key_z XK_z
-		#define key_0 XK_0
-		#define key_1 XK_1
-		#define key_2 XK_2
-		#define key_3 XK_3
-		#define key_4 XK_4
-		#define key_5 XK_5
-		#define key_6 XK_6
-		#define key_7 XK_7
-		#define key_8 XK_8
-		#define key_9 XK_9
-		#define key_space XK_space
-
-		#define key_backspace __clamp_key( XK_BackSpace )
-		#define key_tab __clamp_key( XK_Tab )
-		#define key_return __clamp_key( XK_Return )
-		#define key_escape __clamp_key( XK_Escape )
-		#define key_up __clamp_key( XK_Up )
-		#define key_down __clamp_key( XK_Down )
-		#define key_left __clamp_key( XK_Left )
-		#define key_right __clamp_key( XK_Right )
-	#endif
-
-//
 
 #endif
 
