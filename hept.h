@@ -48,19 +48,19 @@ global list list_object_piles = null;
 		inl NAME assign_##NAME()                                   \
 		{                                                          \
 			NAME this = new_mem( struct( NAME ), 1 );                \
-			if( pile_##NAME == null )                                \
+			if( safe_ptr_get( pile_##NAME ) == null )                                \
 			{                                                        \
-				pile_##NAME = new_pile( NAME );                        \
-				list_add( list_object_piles, pile, pile_##NAME );      \
+				safe_ptr_set(pile_##NAME, new_pile( NAME ));                        \
+				list_safe_add( list_object_piles, pile, pile_##NAME );      \
 			}                                                        \
-			pile_add( pile_##NAME, NAME, this );                     \
-			this->pile_id = pile_##NAME->prev_pos;                   \
+			pile_safe_add( pile_##NAME, NAME, this );                     \
+			this->pile_id = safe_u32_get(pile_##NAME->prev_pos);                   \
 			if( current_##NAME == null ) set_current_##NAME( this ); \
 			out this;                                                \
 		}                                                          \
 		fn delete_##NAME( in NAME in_##NAME )                      \
 		{                                                          \
-			pile_delete( pile_##NAME, in_##NAME->pile_id );          \
+			pile_safe_delete( pile_##NAME, in_##NAME->pile_id );          \
 			free_mem( in_##NAME );                                   \
 		}                                                          \
 		NAME new_##NAME
@@ -1437,10 +1437,39 @@ make_object(
 	out this;
 }
 
-fn update_buffer( in buffer in_buffer, in ptr( pure ) in_data )
+	#define delete_buffer2( BUFFER )                                        \
+		DEF_START                                                            \
+		vkFreeMemory( current_os_machine->device, BUFFER->memory, null );    \
+		vkDestroyBuffer( current_os_machine->device, BUFFER->buffer, null ); \
+		delete_buffer( BUFFER );                                             \
+		DEF_END
+
+fn update_buffer( buffer in_buffer, in u32 in_data_size, in ptr( pure ) in_data )
 {
+	if( in_data_size > in_buffer->size )
+	{
+		in_buffer->size = in_data_size;
+		H_info_buffer buffer_info = H_create_info_buffer(
+			in_buffer->size,
+			in_buffer->form->usage,
+			VK_SHARING_MODE_EXCLUSIVE
+		);
+		in_buffer->buffer = H_new_buffer( current_os_machine->device, buffer_info );
+
+		H_memory_requirements mem_requirements = H_get_memory_requirements_buffer( current_os_machine->device, in_buffer->buffer );
+		H_info_memory memory_info = H_create_info_memory(
+			mem_requirements.size,
+			H_find_mem(
+				current_os_machine->physical_device,
+				mem_requirements.memoryTypeBits,
+				in_buffer->form->properties
+			)
+		);
+		in_buffer->memory = H_new_memory_buffer( current_os_machine->device, memory_info, in_buffer->buffer );
+
+	}
 	ptr( pure ) mapped = null;
-	vkMapMemory( current_os_machine->device, in_buffer->memory, 0, in_buffer->size, 0, ref( mapped ) );
+	vkMapMemory( current_os_machine->device, in_buffer->memory, 0, in_data_size, 0, ref( mapped ) );
 	copy_mem( mapped, in_data, in_buffer->size );
 	vkUnmapMemory( current_os_machine->device, in_buffer->memory );
 }
@@ -1465,6 +1494,7 @@ make_object(
 	enum( image_state ) state;
 	H_image image;
 	H_image_view view;
+	H_image_layout layout;
 	H_memory memory;
 	u32 width;
 	u32 height;
@@ -1482,6 +1512,7 @@ make_object(
 	//
 	this->form = in_form;
 	this->state = in_state;
+	this->layout = H_image_layout_undefined;
 	this->width = in_width;
 	this->height = in_height;
 	this->data = new_list( rgba );
@@ -1507,8 +1538,8 @@ make_object(
 		1,
 		this->form->format,
 		( ( this->state == image_state_src ) ? ( VK_IMAGE_TILING_LINEAR ) : ( VK_IMAGE_TILING_OPTIMAL ) ), // OPTIMAL REQUIRES MULTIPLES OF 32x32
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, //( ( this->state == image_state_src ) ? ( VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT ) : ( VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ) ),
+		this->layout,
+		H_image_usage_sampled | H_image_usage_color_attachment | H_image_usage_transfer_src | H_image_usage_transfer_dst,
 		VK_SHARING_MODE_EXCLUSIVE,
 		VK_SAMPLE_COUNT_1_BIT
 	);
@@ -1538,29 +1569,6 @@ fn update_image( in image in_image )
 	vkMapMemory( current_os_machine->device, in_image->memory, 0, in_image->data->size_type * in_image->data->size, 0, ref( mapped ) );
 	copy_mem( mapped, in_image->data->data, in_image->data->size_type * in_image->data->size );
 	vkUnmapMemory( current_os_machine->device, in_image->memory );
-	/*
-		VkImageMemoryBarrier barrier = { 0 };
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = in_image->image;
-
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = 1;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = 0;
-
-		VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-
-		vkCmdPipelineBarrier( in_renderer->command_buffers[ in_renderer->current_frame ], src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, ref( barrier ) );
-	*/
 }
 
 //
@@ -1953,7 +1961,8 @@ global list list_update_mesh = null;
 global mesh default_mesh_line = null;
 global mesh default_mesh_square = null;
 global mesh default_mesh_square_tex = null;
-global mesh default_mesh_window = null;
+global mesh default_mesh_window_white = null;
+global mesh default_mesh_window_black = null;
 global mesh default_mesh_window_tex = null;
 
 	#define mesh_add_line( var, vertex_struct, a, b )         \
@@ -2083,12 +2092,14 @@ make_object(
 
 	//
 
-	ifn( check_file( spirv_name ) )
+	// ifn( check_file( spirv_name ) )
 	{
+	#ifdef hept_release
 		ifn( check_file( glsl_name ) )
 		{
 			write_file( glsl_name, ( ( this->form->shader_stage->type == shader_stage_type_vertex ) ? ( default_glsl_vert ) : ( default_glsl_frag ) ) );
 		}
+	#endif
 
 		text command = format_text( "glslangValidator -V %s -o %s", glsl_name, spirv_name );
 		s32 sys_result = system( command );
@@ -2133,6 +2144,8 @@ global module default_module_2d_line_frag = null;
 
 make_object(
 	shader_input,
+	u32 binding;
+	ptr(pure) data;
 	H_descriptor_pool descriptor_pool;
 	H_descriptor_set descriptor_set;
 )( in form_shader in_form_shader )
@@ -2171,8 +2184,16 @@ make_object(
 	out this;
 }
 
+global list list_update_shader_input_storage = null;
+global list list_update_shader_input_image = null;
+
 fn update_shader_input_storage( in s32 in_binding, in shader_input in_shader_input, in buffer in_buffer )
 {
+	/*lock_list(list_update_shader_input_storage);
+	in_shader_input->binding = in_binding;
+	in_shader_input->data = to(ptr(pure),in_buffer);
+	list_add(list_update_shader_input_storage,shader_input,in_shader_input);
+	unlock_list(list_update_shader_input_storage);*/
 	H_update_descriptor_set_storage( in_binding, current_os_machine->device, in_shader_input->descriptor_set, in_buffer->buffer, in_buffer->size );
 }
 
@@ -2445,6 +2466,195 @@ global shader default_shader_2d_tri_tex_mul = null;
 global shader default_shader_2d_line = null;
 // global shader default_shader_3d = null;
 
+//
+
+global H_info_pipeline_blend H_default_blend_none = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_none ), 1., 1., 1., 1. );
+global ptr( H_info_pipeline_blend ) default_blend_none = ref( H_default_blend_none );
+
+global H_info_pipeline_blend H_default_blend_normal = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_normal ), 1., 1., 1., 1. );
+global ptr( H_info_pipeline_blend ) default_blend_normal = ref( H_default_blend_normal );
+
+global H_info_pipeline_blend H_default_blend_red = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_constant ), 1., 0., 0., 1. );
+global ptr( H_info_pipeline_blend ) default_blend_red = ref( H_default_blend_red );
+
+global H_info_pipeline_blend H_default_blend_add = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_add ), 1., 1., 1., 1. );
+global ptr( H_info_pipeline_blend ) default_blend_add = ref( H_default_blend_add );
+
+global H_info_pipeline_blend H_default_blend_multiply = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_multiply ), 1., 1., 1., 1. );
+global ptr( H_info_pipeline_blend ) default_blend_multiply = ref( H_default_blend_multiply );
+
+//
+
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+/////// /////// /////// /////// /////// /////// ///////
+
+// commands
+
+global H_command_buffer current_command_buffer = null;
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// image commands
+
+fn use_image_src( in image in_image, in flag in_preserve_contents )
+{
+	H_image_barrier temp_barrier = H_create_image_barrier(
+		in_image->image,
+		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
+		H_image_layout_shader_read_only_optimal,
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		0,
+		1,
+		0,
+		1
+	);
+	in_image->layout = temp_barrier.newLayout;
+
+	vkCmdPipelineBarrier(
+		current_command_buffer,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		0,
+		0,
+		NULL,
+		0,
+		NULL,
+		1,
+		ref( temp_barrier )
+	);
+}
+
+fn use_image_dst( in image in_image, in flag in_preserve_contents )
+{
+	H_image_barrier temp_barrier = H_create_image_barrier(
+		in_image->image,
+		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
+		H_image_layout_color_attachment_optimal,
+		0,
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		0,
+		1,
+		0,
+		1
+	);
+	in_image->layout = temp_barrier.newLayout;
+
+	vkCmdPipelineBarrier(
+		current_command_buffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		0,
+		0,
+		NULL,
+		0,
+		NULL,
+		1,
+		ref( temp_barrier )
+	);
+}
+
+fn use_image_blit_src( in image in_image, in flag in_preserve_contents )
+{
+	H_image_barrier temp_barrier = H_create_image_barrier(
+		in_image->image,
+		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
+		H_image_layout_transfer_src_optimal,
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_TRANSFER_READ_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		0,
+		1,
+		0,
+		1
+	);
+	in_image->layout = temp_barrier.newLayout;
+
+	vkCmdPipelineBarrier(
+		current_command_buffer,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0,
+		0,
+		NULL,
+		0,
+		NULL,
+		1,
+		ref( temp_barrier )
+	);
+}
+
+fn use_image_blit_dst( in image in_image, in flag in_preserve_contents )
+{
+	H_image_barrier temp_barrier = H_create_image_barrier(
+		in_image->image,
+		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
+		H_image_layout_transfer_dst_optimal,
+		0,
+		VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		0,
+		1,
+		0,
+		1
+	);
+	in_image->layout = temp_barrier.newLayout;
+
+	vkCmdPipelineBarrier(
+		current_command_buffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0,
+		0,
+		NULL,
+		0,
+		NULL,
+		1,
+		ref( temp_barrier )
+	);
+}
+
+fn use_image_present( in image in_image, in flag in_preserve_contents )
+{
+	H_image_barrier temp_barrier = H_create_image_barrier(
+		in_image->image,
+		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
+		H_image_layout_present_src_KHR,
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_MEMORY_READ_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		0,
+		1,
+		0,
+		1
+	);
+	in_image->layout = temp_barrier.newLayout;
+
+	vkCmdPipelineBarrier(
+		current_command_buffer,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		0,
+		0,
+		NULL,
+		0,
+		NULL,
+		1,
+		ref( temp_barrier )
+	);
+}
+
+/////// /////// /////// /////// /////// /////// ///////
+
+// shader commands
+
 fn start_shader( in shader in_shader, in u32 in_width, in u32 in_height )
 {
 	set_current_shader( in_shader );
@@ -2463,20 +2673,20 @@ fn start_shader( in shader in_shader, in u32 in_width, in u32 in_height )
 		0.0,
 		1.0
 	);
-	vkCmdSetViewport( current_renderer->command_buffers[ current_renderer->current_frame ], 0, 1, ref( viewport ) );
-	vkCmdBeginRenderPass( current_renderer->command_buffers[ current_renderer->current_frame ], ref( current_frame->info_begin ), VK_SUBPASS_CONTENTS_INLINE );
-	vkCmdBindPipeline( current_renderer->command_buffers[ current_renderer->current_frame ], VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline );
+	vkCmdSetViewport( current_command_buffer, 0, 1, ref( viewport ) );
+	vkCmdBeginRenderPass( current_command_buffer, ref( current_frame->info_begin ), VK_SUBPASS_CONTENTS_INLINE );
+	vkCmdBindPipeline( current_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline );
 }
 
 fn use_shader_input( in shader_input in_shader_input )
 {
-	vkCmdBindDescriptorSets( current_renderer->command_buffers[ current_renderer->current_frame ], VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline_layout, 0, 1, ref( in_shader_input->descriptor_set ), 0, NULL );
+	vkCmdBindDescriptorSets( current_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline_layout, 0, 1, ref( in_shader_input->descriptor_set ), 0, NULL );
 }
 
 fn use_constants( in u32 in_size, in ptr( pure ) in_data )
 {
 	vkCmdPushConstants(
-		current_renderer->command_buffers[ current_renderer->current_frame ],
+		current_command_buffer,
 		current_shader->pipeline_layout,
 		VK_SHADER_STAGE_VERTEX_BIT,
 		0,
@@ -2487,25 +2697,8 @@ fn use_constants( in u32 in_size, in ptr( pure ) in_data )
 
 fn end_shader()
 {
-	vkCmdEndRenderPass( current_renderer->command_buffers[ current_renderer->current_frame ] );
+	vkCmdEndRenderPass( current_command_buffer );
 }
-
-//
-
-global H_info_pipeline_blend H_default_blend_none = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_none ), 1., 1., 1., 1. );
-global ptr( H_info_pipeline_blend ) default_blend_none = ref( H_default_blend_none );
-
-global H_info_pipeline_blend H_default_blend_normal = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_normal ), 1., 1., 1., 1. );
-global ptr( H_info_pipeline_blend ) default_blend_normal = ref( H_default_blend_normal );
-
-global H_info_pipeline_blend H_default_blend_red = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_constant ), 1., 0., 0., 1. );
-global ptr( H_info_pipeline_blend ) default_blend_red = ref( H_default_blend_red );
-
-global H_info_pipeline_blend H_default_blend_add = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_add ), 1., 1., 1., 1. );
-global ptr( H_info_pipeline_blend ) default_blend_add = ref( H_default_blend_add );
-
-global H_info_pipeline_blend H_default_blend_multiply = H_create_info_pipeline_blend( no, 0, 1, ref( H_blend_mode_multiply ), 1., 1., 1., 1. );
-global ptr( H_info_pipeline_blend ) default_blend_multiply = ref( H_default_blend_multiply );
 
 //
 
@@ -2545,7 +2738,7 @@ make_object(
 	enum( event_state ) state;
 	u32 data;
 	fn_ptr( pure, call );
-)( in enum( event_type ) in_type, in u32 in_data, in fn_ptr( pure, in_call ) )
+)( in enum( event_type ) in_type, in u32 in_data, fn_ptr( pure, in_call ) )
 {
 	#ifdef hept_debug
 	print_error( in_type == event_type_null, "event: in_type is null" );
@@ -2558,6 +2751,7 @@ make_object(
 		this->state = event_state_waiting;
 	else
 		this->state = event_state_active;
+	this->call = in_call;
 	//
 	#ifdef hept_trace
 	print_trace( "new event: ID: %d", this->pile_id );
@@ -2915,10 +3109,22 @@ fn main_update_renderers()
 
 		if( this_renderer->changed ) update_renderer( this_renderer );
 
+		current_command_buffer = current_renderer->command_buffers[ current_renderer->current_frame ];
+
 		//
 
 		{
 			vkWaitForFences( current_os_machine->device, 1, ref( this_renderer->flight_fences[ this_renderer->fence_id ] ), VK_TRUE, UINT64_MAX );
+
+			lock_list(list_update_shader_input_storage);
+			//vkDeviceWaitIdle(current_os_machine->device);
+			iter_list(list_update_shader_input_storage,s)
+			{
+				shader_input this_input = list_get(list_update_shader_input_storage,shader_input,s);
+				buffer this_input_buffer = to(buffer,this_input->data);
+				H_update_descriptor_set_storage( this_input->binding, current_os_machine->device, this_input->descriptor_set, this_input_buffer->buffer, this_input_buffer->size );
+			}
+			unlock_list(list_update_shader_input_storage);
 
 			VkResult aquire_result = vkAcquireNextImageKHR(
 				current_os_machine->device, this_renderer->swapchain, UINT64_MAX, this_renderer->image_ready[ this_renderer->current_frame ], VK_NULL_HANDLE, ref( this_renderer->current_frame )
@@ -2933,19 +3139,21 @@ fn main_update_renderers()
 
 			vkResetFences( current_os_machine->device, 1, ref( this_renderer->flight_fences[ this_renderer->fence_id ] ) );
 
-			this_renderer->fence_id = ( this_renderer->current_frame + 1 ) % this_renderer->frames->size;
+			this_renderer->fence_id = ( this_renderer->current_frame + 1 ) mod this_renderer->frames->size;
 		}
 
 		//
 
+		image this_window_image = list_get( this_renderer->frame_window->images, image, 0 );
+
 		frame this_frame = list_get( this_renderer->frames, frame, this_renderer->current_frame );
-		image this_image = list_get( this_frame->images, image, 0 );
+		image this_frame_image = list_get( this_frame->images, image, 0 );
 
 		VkCommandBufferBeginInfo begin_info = {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 
 		vkBeginCommandBuffer(
-			this_renderer->command_buffers[ this_renderer->current_frame ],
+			current_command_buffer,
 			ref( begin_info )
 		);
 
@@ -2971,8 +3179,8 @@ fn main_update_renderers()
 				{
 					this_mesh->index_buffer = new_buffer( default_form_buffer_index, size_u32 * this_mesh->indices->size );
 				}
-				update_buffer( this_mesh->vertex_buffer, this_mesh->vertices->data );
-				update_buffer( this_mesh->index_buffer, this_mesh->indices->data );
+				update_buffer( this_mesh->vertex_buffer, this_mesh->vertices->size * this_mesh->vertices->size_type, this_mesh->vertices->data );
+				update_buffer( this_mesh->index_buffer, this_mesh->indices->size * this_mesh->indices->size_type, this_mesh->indices->data );
 				vacate_spinlock( this_mesh->lock );
 			}
 		}
@@ -2980,31 +3188,7 @@ fn main_update_renderers()
 		//
 
 		set_current_frame( current_renderer->frame_window );
-
-		{
-			image temp_image = list_get( this_renderer->frame_window->images, image, 0 );
-			VkImageMemoryBarrier barrier = { 0 };
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.image = temp_image->image;
-
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = 1;
-			barrier.subresourceRange.baseArrayLayer = 0;
-			barrier.subresourceRange.layerCount = 1;
-
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-			VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-			vkCmdPipelineBarrier( this_renderer->command_buffers[ this_renderer->current_frame ], src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, ref( barrier ) );
-		}
+		use_image_dst( this_window_image, no );
 
 		//
 
@@ -3012,44 +3196,9 @@ fn main_update_renderers()
 
 		//
 
-		// if( no )
 		{
-			image temp_image = list_get( this_renderer->frame_window->images, image, 0 );
-
-			// if( no )
-			{ //
-				VkImageMemoryBarrier barrier = { 0 };
-				barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-				barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-				barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-				barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				barrier.image = temp_image->image;
-
-				barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				barrier.subresourceRange.baseMipLevel = 0;
-				barrier.subresourceRange.levelCount = 1;
-				barrier.subresourceRange.baseArrayLayer = 0;
-				barrier.subresourceRange.layerCount = 1;
-
-				barrier.srcAccessMask = 0;
-				barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-				VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-				VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-
-				vkCmdPipelineBarrier( this_renderer->command_buffers[ this_renderer->current_frame ], src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, ref( barrier ) );
-
-				barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-				barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-				barrier.image = this_image->image;
-				barrier.srcAccessMask = 0;
-				barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-				dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-
-				vkCmdPipelineBarrier( this_renderer->command_buffers[ this_renderer->current_frame ], src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, ref( barrier ) );
-			}
+			use_image_blit_src( this_window_image, yes );
+			use_image_blit_dst( this_frame_image, no );
 
 			//
 
@@ -3102,10 +3251,10 @@ fn main_update_renderers()
 			blit.dstSubresource.layerCount = 1;
 
 			vkCmdBlitImage(
-				this_renderer->command_buffers[ this_renderer->current_frame ],
-				temp_image->image,
+				current_command_buffer,
+				this_window_image->image,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				this_image->image,
+				this_frame_image->image,
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				1,
 				&blit,
@@ -3113,39 +3262,16 @@ fn main_update_renderers()
 			);
 		}
 
-		// if( 0 )
-		{ //
-			VkImageMemoryBarrier barrier = { 0 };
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.image = this_image->image;
+		use_image_present( this_frame_image, yes );
 
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = 1;
-			barrier.subresourceRange.baseArrayLayer = 0;
-			barrier.subresourceRange.layerCount = 1;
-
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			barrier.dstAccessMask = 0;
-
-			VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-
-			vkCmdPipelineBarrier( this_renderer->command_buffers[ this_renderer->current_frame ], src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, ref( barrier ) );
-		}
-
-		vkEndCommandBuffer( this_renderer->command_buffers[ this_renderer->current_frame ] );
+		vkEndCommandBuffer( current_command_buffer );
 
 		//
 
 		VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
 		H_info_submit submit_info = H_create_info_submit(
-			1, ref( this_renderer->image_ready[ this_renderer->current_frame ] ), wait_stages, 1, ref( this_renderer->command_buffers[ this_renderer->current_frame ] ), 1, ref( this_renderer->image_done[ this_renderer->current_frame ] )
+			1, ref( this_renderer->image_ready[ this_renderer->current_frame ] ), wait_stages, 1, ref( current_command_buffer ), 1, ref( this_renderer->image_done[ this_renderer->current_frame ] )
 		);
 
 		H_submit_queue(
@@ -3222,7 +3348,18 @@ inl ptr( pure ) main_thread_call( in ptr( pure ) in_ptr )
 		if( hept_exit ) out null;
 		start_os_pacer( main_thread_pacer );
 		//
-
+		lock_pile(pile_event);
+		iter_pile( pile_event, e )
+		{
+			maybe maybe_event = pile_find( pile_event, event, e );
+			ifn( maybe_event.valid ) next;
+			event this_event = to( event, maybe_event.value );
+			perform_event(this_event);
+			//
+		}
+		unlock_pile(pile_event);
+		//
+		update_inputs();
 		//
 		if( hept_exit ) out null;
 		wait_os_pacer( main_thread_pacer );
@@ -3476,16 +3613,27 @@ fn main_defaults()
 	);
 	update_mesh( default_mesh_square_tex );
 
-	default_mesh_window = new_mesh( default_form_mesh_2d_tri );
+	default_mesh_window_white = new_mesh( default_form_mesh_2d_tri );
 	mesh_add_quad(
-		default_mesh_window,
+		default_mesh_window_white,
 		struct( vertex_2d_tri ),
 		create_struct_vertex_2d_tri( -1., -1., 1, 1, 1 ),
 		create_struct_vertex_2d_tri( 1., -1., 1, 1, 1 ),
 		create_struct_vertex_2d_tri( 1., 1., 1, 1, 1 ),
 		create_struct_vertex_2d_tri( -1., 1., 1, 1, 1 )
 	);
-	update_mesh( default_mesh_window );
+	update_mesh( default_mesh_window_white );
+
+	default_mesh_window_black = new_mesh( default_form_mesh_2d_tri );
+	mesh_add_quad(
+		default_mesh_window_black,
+		struct( vertex_2d_tri ),
+		create_struct_vertex_2d_tri( -1., -1., 0, 0, 0 ),
+		create_struct_vertex_2d_tri( 1., -1., 0, 0, 0 ),
+		create_struct_vertex_2d_tri( 1., 1., 0, 0, 0 ),
+		create_struct_vertex_2d_tri( -1., 1., 0, 0, 0 )
+	);
+	update_mesh( default_mesh_window_black );
 
 	default_mesh_window_tex = new_mesh( default_form_mesh_2d_tri_tex );
 	mesh_add_quad(
@@ -3532,6 +3680,7 @@ fn main_defaults()
 			inputs = new_mem( struct( input ), 512 );                                      \
 			input_updates = new_mem( u16, 256 );                                           \
 			list_update_mesh = new_list( mesh );                                           \
+      list_update_shader_input_storage = new_list(shader_input);                                                                              \
 			main_width = WIDTH;                                                            \
 			main_height = HEIGHT;                                                          \
 			main_fn_command = to( fn_ptr( pure, , pure ), FN_COMMAND );                    \
@@ -3544,6 +3693,7 @@ fn main_defaults()
 			main_update_os_machines();                                                     \
 			main_defaults();                                                               \
 			main_init();                                                                   \
+      main_thread = new_os_thread(main_thread_call);                                                                              \
 			loop                                                                           \
 			{                                                                              \
 				main_update();                                                               \
