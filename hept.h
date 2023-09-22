@@ -2035,17 +2035,14 @@ global text default_glsl_vert =
 	"#version 450\n"
 	""
 	"layout(location = 0) in vec2 in_pos;\n"
-	"layout(location = 1) in vec2 in_uv;\n"
-	"layout(location = 2) in vec3 in_rgb;\n"
+	"layout(location = 1) in vec3 in_rgb;\n"
 	""
 	"layout(location = 0) out vec2 vert_pos;\n"
-	"layout(location = 1) out vec2 vert_uv;\n"
-	"layout(location = 2) out vec3 vert_rgb;\n"
+	"layout(location = 1) out vec3 vert_rgb;\n"
 	""
 	"void main()\n"
 	"{\n"
 	"    vert_pos = in_pos;\n"
-	"    vert_uv = in_uv;\n"
 	"    vert_rgb = in_rgb;\n"
 	"    gl_Position = vec4(vert_pos, 0.0, 1.0);\n"
 	"}";
@@ -2054,8 +2051,7 @@ global text default_glsl_frag =
 	"#version 450\n"
 	""
 	"layout(location = 0) in vec2 vert_pos;\n"
-	"layout(location = 1) in vec2 vert_uv;\n"
-	"layout(location = 2) in vec3 vert_rgb;\n"
+	"layout(location = 1) in vec3 vert_rgb;\n"
 	""
 	"layout(location = 0) out vec4 out_rgba;\n"
 	""
@@ -2094,7 +2090,7 @@ make_object(
 
 	// ifn( check_file( spirv_name ) )
 	{
-	#ifdef hept_release
+	#ifndef hept_release
 		ifn( check_file( glsl_name ) )
 		{
 			write_file( glsl_name, ( ( this->form->shader_stage->type == shader_stage_type_vertex ) ? ( default_glsl_vert ) : ( default_glsl_frag ) ) );
@@ -3348,16 +3344,19 @@ inl ptr( pure ) main_thread_call( in ptr( pure ) in_ptr )
 		if( hept_exit ) out null;
 		start_os_pacer( main_thread_pacer );
 		//
-		lock_pile(pile_event);
-		iter_pile( pile_event, e )
+		if(pile_event != null)
 		{
-			maybe maybe_event = pile_find( pile_event, event, e );
-			ifn( maybe_event.valid ) next;
-			event this_event = to( event, maybe_event.value );
-			perform_event(this_event);
-			//
+			lock_pile( pile_event );
+			iter_pile( pile_event, e )
+			{
+				maybe maybe_event = pile_find( pile_event, event, e );
+				ifn( maybe_event.valid ) next;
+				event this_event = to( event, maybe_event.value );
+				perform_event( this_event );
+				//
+			}
+			unlock_pile( pile_event );
 		}
-		unlock_pile(pile_event);
 		//
 		update_inputs();
 		//
