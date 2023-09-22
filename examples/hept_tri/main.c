@@ -18,13 +18,13 @@ main(
 	command
 )
 {
-	triangle = new_mesh( default_form_mesh_2d );
+	triangle = new_mesh( default_form_mesh_2d_tri );
 	mesh_add_tri(
 		triangle,
-		struct( vertex_2d ),
-		create_struct_vertex_2d( 0, -.5, 0, 0, 1, 0, 0 ),
-		create_struct_vertex_2d( .5, .5, 1, 1, 0, 1, 0 ),
-		create_struct_vertex_2d( -.5, .5, 1, 0, 0, 0, 1 )
+		struct( vertex_2d_tri ),
+		create_struct_vertex_2d_tri( 0, -.5, 1, 0, 0 ),
+		create_struct_vertex_2d_tri( .5, .5, 0, 1, 0 ),
+		create_struct_vertex_2d_tri( -.5, .5, 0, 0, 1 )
 	);
 	update_mesh( triangle );
 }
