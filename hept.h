@@ -30,46 +30,46 @@ global list hept_object_piles = null;
 
 //
 
-	#define make_object( NAME, ... )                             \
-		make_struct( NAME )                                        \
-		{                                                          \
-			u32 pile_id;                                             \
-			spinlock lock;                                           \
-			__VA_ARGS__                                              \
-		};                                                         \
-		make_ptr( struct( NAME ) ) NAME;                           \
-		global NAME current_##NAME = null;                         \
-		global pile pile_##NAME = null;                            \
-		fn lock_##NAME( in NAME in_##NAME )                        \
-		{                                                          \
-			engage_spinlock( in_##NAME->lock );                            \
-		}                                                          \
-		fn unlock_##NAME( in NAME in_##NAME )                      \
-		{                                                          \
-			vacate_spinlock( in_##NAME->lock );                            \
-		}                                                          \
-		fn set_current_##NAME( in NAME in_##NAME )                 \
-		{                                                          \
-			safe_ptr_set(current_##NAME, in_##NAME);                              \
-		}                                                          \
-		inl NAME assign_##NAME()                                   \
-		{                                                          \
-			NAME this = new_ptr( struct( NAME ), 1 );                \
-			if( safe_ptr_get(pile_##NAME) == null )                                \
-			{                                                        \
-				safe_ptr_set(pile_##NAME, new_pile( NAME ));                        \
-				list_safe_add( hept_object_piles, pile, pile_##NAME );      \
-			}                                                        \
-			pile_safe_add( pile_##NAME, NAME, this );                     \
-			safe_u32_set(this->pile_id, safe_u32_get(pile_##NAME->prev_pos));                   \
-			if( safe_ptr_get(current_##NAME) == null ) set_current_##NAME( this ); \
-			out this;                                                \
-		}                                                          \
-		fn unassign_##NAME( in NAME in_##NAME )                      \
-		{                                                          \
-			pile_delete( pile_##NAME, ptr(pure), in_##NAME->pile_id );          \
-			delete_ptr( in_##NAME );                                 \
-		}                                                          \
+	#define make_object( NAME, ... )                                             \
+		make_struct( NAME )                                                        \
+		{                                                                          \
+			u32 pile_id;                                                             \
+			spinlock lock;                                                           \
+			__VA_ARGS__                                                              \
+		};                                                                         \
+		make_ptr( struct( NAME ) ) NAME;                                           \
+		global NAME current_##NAME = null;                                         \
+		global pile pile_##NAME = null;                                            \
+		fn lock_##NAME( in NAME in_##NAME )                                        \
+		{                                                                          \
+			engage_spinlock( in_##NAME->lock );                                      \
+		}                                                                          \
+		fn unlock_##NAME( in NAME in_##NAME )                                      \
+		{                                                                          \
+			vacate_spinlock( in_##NAME->lock );                                      \
+		}                                                                          \
+		fn set_current_##NAME( in NAME in_##NAME )                                 \
+		{                                                                          \
+			safe_ptr_set( current_##NAME, in_##NAME );                               \
+		}                                                                          \
+		inl NAME assign_##NAME()                                                   \
+		{                                                                          \
+			NAME this = new_ptr( struct( NAME ), 1 );                                \
+			if( safe_ptr_get( pile_##NAME ) == null )                                \
+			{                                                                        \
+				safe_ptr_set( pile_##NAME, new_pile( NAME ) );                         \
+				list_safe_add( hept_object_piles, pile, pile_##NAME );                 \
+			}                                                                        \
+			pile_safe_add( pile_##NAME, NAME, this );                                \
+			safe_u32_set( this->pile_id, safe_u32_get( pile_##NAME->prev_pos ) );    \
+			if( safe_ptr_get( current_##NAME ) == null ) set_current_##NAME( this ); \
+			out this;                                                                \
+		}                                                                          \
+		fn unassign_##NAME( in NAME in_##NAME )                                    \
+		{                                                                          \
+			pile_delete( pile_##NAME, ptr( pure ), in_##NAME->pile_id );             \
+			delete_ptr( in_##NAME );                                                 \
+		}                                                                          \
 		NAME new_##NAME
 
 fn delete_hept_object_piles()
@@ -288,11 +288,11 @@ text parent_folder( in text in_text )
 text get_folder()
 {
 	s8 temp_text[ 257 ];
-#if OS_WINDOWS
+	#if OS_WINDOWS
 	GetModuleFileNameA( NULL, temp_text, 256 );
-#elif OS_LINUX
-    readlink("/proc/self/exe", temp_text, 256);
-#endif
+	#elif OS_LINUX
+	readlink( "/proc/self/exe", temp_text, 256 );
+	#endif
 	text out_text = parent_folder( new_text( temp_text, 0 ) );
 	out out_text;
 }
@@ -527,21 +527,20 @@ make_object(
 
 	text desired_debug_layers[] = {
 		"VK_LAYER_KHRONOS_validation",
-		"VK_LAYER_LUNARG_monitor"
-	};
+		"VK_LAYER_LUNARG_monitor" };
 	u32 desired_debug_layers_count = 2;
 
 	u32 debug_layer_count = H_get_debug_layers( null ), enabled_debug_layer_count = 0;
 	ptr( H_debug_layer_properties ) available_layers = new_ptr( H_debug_layer_properties, debug_layer_count );
 	H_get_debug_layers( available_layers );
-	if(available_layers == null)
+	if( available_layers == null )
 	{
-#ifdef hept_debug
-        print_error(yes, "os_core: memory H_get_debug_layers() failed for available_layers");
-#endif
+	#ifdef hept_debug
+		print_error( yes, "os_core: memory H_get_debug_layers() failed for available_layers" );
+	#endif
 		delete_ptr( available_layers );
-        out null;
-    }
+		out null;
+	}
 
 	ptr( text ) debug_layers = new_ptr( text, desired_debug_layers_count );
 
@@ -580,18 +579,19 @@ make_object(
 	H_struct_instance instance_info = H_create_struct_instance(
 		ref( info_app ),
 		enabled_debug_layer_count,
-        (const char *const *) debug_layers,
+		( const char* const* )debug_layers,
 		extension_count,
-        (const char *const *) extensions
+		( const char* const* )extensions
 	);
 	this->instance = H_new_instance( instance_info );
-    #ifdef hept_debug
-	if(this->instance == null) {
-		print_error(yes, "os_core: instance could not be created");
-		delete_ptr(debug_layers);
+	#ifdef hept_debug
+	if( this->instance == null )
+	{
+		print_error( yes, "os_core: instance could not be created" );
+		delete_ptr( debug_layers );
 		out null;
 	}
-    #endif
+	#endif
 
 	#ifdef hept_debug
 	print_error( this->instance == null, "os_core: instance could not be created" );
@@ -608,7 +608,7 @@ make_object(
 
 fn delete_os_core( in os_core in_os_core )
 {
-	vkDestroyInstance(in_os_core->instance,null);
+	vkDestroyInstance( in_os_core->instance, null );
 	unassign_os_core( in_os_core );
 }
 
@@ -664,7 +664,7 @@ make_object(
 
 fn delete_os_machine( in os_machine in_os_machine )
 {
-	vkDestroyDevice(in_os_machine->device,null);
+	vkDestroyDevice( in_os_machine->device, null );
 	unassign_os_machine( in_os_machine );
 }
 
@@ -786,6 +786,8 @@ make_object(
 
 	SetWindowText( this->link.hwnd, this->name );
 
+	HANDLE consoleHandle = GetStdHandle( STD_OUTPUT_HANDLE );
+
 	#elif OS_LINUX
 	this->link.xdis = XOpenDisplay( NULL );
 
@@ -828,12 +830,12 @@ make_object(
 fn delete_os_window( in os_window in_os_window )
 {
 	delete_text( in_os_window->name );
-	vkDestroySurfaceKHR(current_os_core->instance,in_os_window->surface,null);
-#if OS_WINDOWS
-	DestroyWindow(in_os_window->link.hwnd);
-#elif OS_LINUX
-    XDestroyWindow(in_os_window->link.xdis,in_os_window->link.xwin);
-#endif
+	vkDestroySurfaceKHR( current_os_core->instance, in_os_window->surface, null );
+	#if OS_WINDOWS
+	DestroyWindow( in_os_window->link.hwnd );
+	#elif OS_LINUX
+	XDestroyWindow( in_os_window->link.xdis, in_os_window->link.xwin );
+	#endif
 	unassign_os_window( in_os_window );
 }
 
@@ -1004,7 +1006,7 @@ make_object(
 
 fn delete_form_image( in form_image in_form_image )
 {
-	vkDestroySampler(current_os_machine->device, in_form_image->sampler,null);
+	vkDestroySampler( current_os_machine->device, in_form_image->sampler, null );
 	unassign_form_image( in_form_image );
 }
 
@@ -1132,6 +1134,7 @@ make_enum( frame_type ){
 	frame_type_present = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 	frame_type_shader_read = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	frame_type_attachment = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	frame_type_depth = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 	frame_type_general = VK_IMAGE_LAYOUT_GENERAL,
 };
 
@@ -1200,13 +1203,32 @@ make_object(
 		form_frame_layer this_layer = list_get( this->layers, form_frame_layer, l );
 		attachments[ l ].format = this_layer->format;
 		attachments[ l ].samples = VK_SAMPLE_COUNT_1_BIT;
-		attachments[ l ].loadOp = ( this->type == frame_type_attachment ) ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachments[ l ].loadOp = ( this->type == frame_type_attachment or this->type == frame_type_depth ) ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
 		attachments[ l ].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachments[ l ].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachments[ l ].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		attachments[ l ].initialLayout = ( this->type == frame_type_attachment ) ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+		attachments[ l ].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		attachments[ l ].finalLayout = to( H_image_layout, this->type );
 		attachments[ l ].flags = 0;
+
+		if( this->type == frame_type_attachment or this->type == frame_type_depth )
+		{
+			with( this_layer->type )
+			{
+				is( frame_layer_type_rgba )
+				{
+					attachments[ l ].initialLayout = to( H_image_layout, frame_type_attachment );
+					attachments[ l ].finalLayout = to( H_image_layout, frame_type_attachment );
+					skip;
+				}
+				is( frame_layer_type_depth )
+				{
+					attachments[ l ].initialLayout = to( H_image_layout, frame_type_depth );
+					attachments[ l ].finalLayout = to( H_image_layout, frame_type_depth );
+					skip;
+				}
+			}
+		}
 	}
 
 	H_struct_render_pass render_pass_info = H_create_struct_render_pass( this->layers->size, attachments, 1, ref( subpass ), 0, null );
@@ -1221,7 +1243,7 @@ make_object(
 
 fn delete_form_frame( in form_frame in_form_frame )
 {
-	vkDestroyRenderPass(current_os_machine->device,in_form_frame->render_pass,null);
+	vkDestroyRenderPass( current_os_machine->device, in_form_frame->render_pass, null );
 	delete_list( in_form_frame->layers );
 	unassign_form_frame( in_form_frame );
 }
@@ -1248,6 +1270,7 @@ fn delete_all_form_frames()
 }
 
 global form_frame default_form_frame = null;
+global form_frame default_form_frame_depth = null;
 
 //
 
@@ -1551,7 +1574,9 @@ fn delete_all_form_meshes()
 global form_mesh default_form_mesh_2d_tri = null;
 global form_mesh default_form_mesh_2d_tri_tex = null;
 global form_mesh default_form_mesh_2d_line = null;
-// global form_mesh default_form_mesh_3d = null;
+global form_mesh default_form_mesh_3d_tri = null;
+global form_mesh default_form_mesh_3d_tri_tex = null;
+global form_mesh default_form_mesh_3d_line = null;
 
 //
 
@@ -1683,12 +1708,12 @@ global form_module default_form_module_2d_tri_tex_vert = null;
 global form_module default_form_module_2d_tri_tex_frag = null;
 global form_module default_form_module_2d_line_vert = null;
 global form_module default_form_module_2d_line_frag = null;
-// global form_module default_form_module_3d_tri_vert = null;
-// global form_module default_form_module_3d_tri_frag = null;
-// global form_module default_form_module_3d_tri_tex_vert = null;
-// global form_module default_form_module_3d_tri_tex_frag = null;
-// global form_module default_form_module_3d_line_vert = null;
-// global form_module default_form_module_3d_line_frag = null;
+global form_module default_form_module_3d_tri_vert = null;
+global form_module default_form_module_3d_tri_frag = null;
+global form_module default_form_module_3d_tri_tex_vert = null;
+global form_module default_form_module_3d_tri_tex_frag = null;
+global form_module default_form_module_3d_line_vert = null;
+global form_module default_form_module_3d_line_frag = null;
 
 //
 
@@ -1810,7 +1835,7 @@ make_object(
 
 fn delete_form_shader( in form_shader in_form_shader )
 {
-	if(in_form_shader->descriptor_layout != null) vkDestroyDescriptorSetLayout(current_os_machine->device, in_form_shader->descriptor_layout,null);
+	if( in_form_shader->descriptor_layout != null ) vkDestroyDescriptorSetLayout( current_os_machine->device, in_form_shader->descriptor_layout, null );
 	delete_list( in_form_shader->bindings );
 	unassign_form_shader( in_form_shader );
 }
@@ -1891,12 +1916,10 @@ make_object(
 
 fn delete_buffer( in buffer in_buffer )
 {
-	vkFreeMemory(current_os_machine->device,in_buffer->memory,null);
-	vkDestroyBuffer(current_os_machine->device,in_buffer->buffer,null);
+	vkFreeMemory( current_os_machine->device, in_buffer->memory, null );
+	vkDestroyBuffer( current_os_machine->device, in_buffer->buffer, null );
 	unassign_buffer( in_buffer );
 }
-
-
 
 make_struct( buffer_ticket )
 {
@@ -1916,9 +1939,9 @@ global list buffer_delete_tickets = null;
 
 inl flag update_buffer( in buffer in_buffer, in u64 in_update_size, ptr( pure ) in_data )
 {
-	if(in_update_size == 0) out;
-	lock_pile(buffer_tickets);
-	lock_buffer(in_buffer);
+	if( in_update_size == 0 ) out no;
+	// lock_pile(buffer_tickets);
+	// lock_buffer(in_buffer);
 	if( in_buffer->ticket_id == -1 )
 	{
 		pile_add(
@@ -1928,7 +1951,7 @@ inl flag update_buffer( in buffer in_buffer, in u64 in_update_size, ptr( pure ) 
 				struct( buffer_ticket ),
 				in_buffer,
 				in_update_size,
-				safe_ptr_get(in_data)
+				in_data
 			)
 		);
 		in_buffer->ticket_id = buffer_tickets->prev_pos;
@@ -1937,34 +1960,34 @@ inl flag update_buffer( in buffer in_buffer, in u64 in_update_size, ptr( pure ) 
 	{
 		ptr( struct( buffer_ticket ) ) ticket_ptr = ref( pile_find( buffer_tickets, struct( buffer_ticket ), in_buffer->ticket_id ) );
 		ticket_ptr->size = in_update_size;
-		ticket_ptr->data = safe_ptr_get(in_data);
+		ticket_ptr->data = in_data;
 	}
 
 	u64 temp_size = in_buffer->size;
-	unlock_buffer(in_buffer);
-	unlock_pile(buffer_tickets);
+	// unlock_buffer(in_buffer);
+	// unlock_pile(buffer_tickets);
 	out in_update_size > temp_size;
 }
 
 fn process_buffer_ticket( ptr( struct( buffer_ticket ) ) in_ticket )
 {
 	buffer this_buffer = in_ticket->buffer;
-	lock_buffer(this_buffer);
+	// lock_buffer(this_buffer);
 	if( in_ticket->size > this_buffer->size )
 	{
-		if(this_buffer->buffer != null)
-		list_add(
-			buffer_delete_tickets,
-			struct(buffer_delete_ticket),
-			create(
-				struct(buffer_delete_ticket),
-				this_buffer->buffer,
-				this_buffer->memory,
-				0
-			)
-		);
+		if( this_buffer->buffer != null )
+			list_add(
+				buffer_delete_tickets,
+				struct( buffer_delete_ticket ),
+				create(
+					struct( buffer_delete_ticket ),
+					this_buffer->buffer,
+					this_buffer->memory,
+					0
+				)
+			);
 
-		this_buffer->size = in_ticket->size * 2;
+		this_buffer->size = in_ticket->size;
 		H_struct_buffer buffer_info = H_create_struct_buffer(
 			this_buffer->size,
 			this_buffer->form->usage,
@@ -1988,18 +2011,18 @@ fn process_buffer_ticket( ptr( struct( buffer_ticket ) ) in_ticket )
 
 	//
 
-	if( safe_ptr_get(in_ticket->data) != null )
+	if( in_ticket->data != null )
 	{
 		once ptr( pure ) mapped = null;
 		vkMapMemory( current_os_machine->device, this_buffer->memory, 0, in_ticket->size, 0, ref( mapped ) );
-		copy_ptr( mapped, safe_ptr_get(in_ticket->data), in_ticket->size );
+		copy_ptr( mapped, in_ticket->data, in_ticket->size );
 		vkUnmapMemory( current_os_machine->device, this_buffer->memory );
 		in_ticket->data = null;
 	}
 
 	pile_delete( buffer_tickets, struct( buffer_ticket ), this_buffer->ticket_id );
 	this_buffer->ticket_id = -1;
-	unlock_buffer(this_buffer);
+	// unlock_buffer(this_buffer);
 }
 
 fn delete_all_buffers()
@@ -2022,11 +2045,11 @@ fn delete_all_buffers()
 		}
 	}
 
-	iter_list(buffer_delete_tickets,b)
+	iter_list( buffer_delete_tickets, b )
 	{
-		ptr(struct(buffer_delete_ticket)) this_ticket = ref(list_remove_front(buffer_delete_tickets,struct(buffer_delete_ticket),b));
-		vkFreeMemory(current_os_machine->device,this_ticket->memory,null);
-		vkDestroyBuffer(current_os_machine->device,this_ticket->buffer,null);
+		ptr( struct( buffer_delete_ticket ) ) this_ticket = ref( list_remove_front( buffer_delete_tickets, struct( buffer_delete_ticket ) ) );
+		vkFreeMemory( current_os_machine->device, this_ticket->memory, null );
+		vkDestroyBuffer( current_os_machine->device, this_ticket->buffer, null );
 	}
 }
 
@@ -2096,7 +2119,7 @@ make_object(
 		1,
 		H_image_sample_1,
 		( ( this->state == image_state_src ) ? ( VK_IMAGE_TILING_LINEAR ) : ( VK_IMAGE_TILING_OPTIMAL ) ),
-		H_image_usage_sampled | H_image_usage_color_attachment | H_image_usage_transfer_src | H_image_usage_transfer_dst,
+		( ( this->form->type == image_type_depth ) ? ( H_image_usage_depth_stencil_attachment ) : ( H_image_usage_sampled | H_image_usage_color_attachment ) ) | H_image_usage_transfer_src | H_image_usage_transfer_dst,
 		H_sharing_mode_exclusive,
 		0,
 		null,
@@ -2124,10 +2147,10 @@ make_object(
 
 fn delete_image( in image in_image )
 {
-    if(in_image->memory != null) vkFreeMemory( current_os_machine->device, in_image->memory, null );
-    if(in_image->view != null) vkDestroyImageView( current_os_machine->device, in_image->view, null );
-    if(in_image->image != null and in_image->state != image_state_swap) vkDestroyImage( current_os_machine->device, in_image->image, null );
-	delete_list(in_image->data);
+	if( in_image->memory != null ) vkFreeMemory( current_os_machine->device, in_image->memory, null );
+	if( in_image->view != null ) vkDestroyImageView( current_os_machine->device, in_image->view, null );
+	if( in_image->image != null and in_image->state != image_state_swap ) vkDestroyImage( current_os_machine->device, in_image->image, null );
+	delete_list( in_image->data );
 	unassign_image( in_image );
 }
 
@@ -2169,8 +2192,7 @@ make_object(
 	u32 max_w;
 	u32 max_h;
 	H_struct_begin_render_pass info_begin;
-	VkClearValue clear_col;
-	VkClearValue clear_dep;
+	VkClearValue clear_col[ 2 ];
 )( in form_frame in_form, in list in_images )
 {
 	#ifdef hept_debug
@@ -2228,13 +2250,13 @@ make_object(
 	);
 	this->frame = H_new_frame( current_os_machine->device, frame_info );
 
-	this->clear_col = ( VkClearValue ){ 0., 0., 0., 0. };
-	// result->clear_dep = (VkClearValue){ 0.,0.,0.,0. };
+	this->clear_col[ 0 ] = ( VkClearValue ){ 0., 0., 0., 0. };
+	this->clear_col[ 1 ] = ( VkClearValue ){ 0., 0., 0., 0. };
 	this->info_begin = H_create_struct_begin_render_pass(
 		this->form->render_pass,
 		this->frame,
 		( ( H_rect_2d ){ 0, 0, this->max_w, this->max_h } ),
-		1,
+		this->form->layers->size,
 		ref( this->clear_col )
 	);
 	//
@@ -2247,7 +2269,7 @@ make_object(
 
 fn delete_frame( in frame in_frame )
 {
-	vkDestroyFramebuffer(current_os_machine->device,in_frame->frame,null);
+	vkDestroyFramebuffer( current_os_machine->device, in_frame->frame, null );
 	delete_list( in_frame->images );
 	delete_list( in_frame->views );
 	unassign_frame( in_frame );
@@ -2333,7 +2355,7 @@ make_object(
 fn delete_renderer( in renderer in_renderer )
 {
 	vkDestroySwapchainKHR( current_os_machine->device, in_renderer->swapchain, null );
-	vkFreeCommandBuffers(current_os_machine->device,in_renderer->form->command_pool,in_renderer->frames->size,in_renderer->command_buffers);
+	vkFreeCommandBuffers( current_os_machine->device, in_renderer->form->command_pool, in_renderer->frames->size, in_renderer->command_buffers );
 	iter( in_renderer->frames->size, i )
 	{
 		vkDestroySemaphore( current_os_machine->device, in_renderer->image_ready[ i ], null );
@@ -2367,7 +2389,7 @@ fn delete_all_renderers()
 
 fn refresh_renderer( in renderer in_renderer )
 {
-	if( safe_flag_get(hept_exit) ) out;
+	if( hept_exit ) out;
 
 	vkDeviceWaitIdle( current_os_machine->device );
 
@@ -2518,9 +2540,34 @@ fn refresh_renderer( in renderer in_renderer )
 		in_renderer->frame_window_height
 	);
 	//
+
+	form_image form_image_depth = new_form_image( image_type_depth, VK_FORMAT_D32_SFLOAT );
+
+	image depth_image = new_image(
+		form_image_depth,
+		image_state_dst,
+		in_renderer->frame_window_width,
+		in_renderer->frame_window_height
+	);
+
+	form_frame temp_form_frame;
+	{
+		list layers = new_list( form_frame_layer );
+		form_frame_layer layer_rgba = new_form_frame_layer( frame_layer_type_rgba, in_renderer->swapchain_format );
+		form_frame_layer layer_depth = new_form_frame_layer( frame_layer_type_depth, VK_FORMAT_D32_SFLOAT );
+		list_add( layers, form_frame_layer, layer_rgba );
+		list_add( layers, form_frame_layer, layer_depth );
+
+		temp_form_frame = new_form_frame(
+			frame_type_depth,
+			layers
+		);
+	}
+
 	list temp_list_images = new_list( image );
 	list_add( temp_list_images, image, temp_image );
-	in_renderer->frame_window = new_frame( current_form_frame, temp_list_images );
+	list_add( temp_list_images, image, depth_image );
+	in_renderer->frame_window = new_frame( temp_form_frame, temp_list_images );
 
 	in_renderer->changed = no;
 }
@@ -2555,12 +2602,29 @@ make_struct( vertex_2d_line )
 };
 	#define create_struct_vertex_2d_line( x, y, r, g, b ) create( struct( vertex_2d_line ), .pos = { x, y }, .rgb = { r, g, b } )
 
-make_struct( vertex_3d )
+make_struct( vertex_3d_tri )
+{
+	struct( fvec3 ) pos;
+	struct( fvec3 ) rgb;
+};
+	#define create_struct_vertex_3d_tri( x, y, z, r, g, b ) create( struct( vertex_3d_tri ), .pos = { x, y, z }, .rgb = { r, g, b } )
+
+make_struct( vertex_3d_tri_tex )
 {
 	struct( fvec3 ) pos;
 	struct( fvec2 ) uv;
 	struct( fvec3 ) rgb;
 };
+	#define create_struct_vertex_3d_tri_tex( x, y, z, u, v, r, g, b ) create( struct( vertex_3d_tri_tex ), .pos = { x, y, z }, .uv = { u, v }, .rgb = { r, g, b } )
+
+make_struct( vertex_3d_line )
+{
+	struct( fvec3 ) pos;
+	struct( fvec3 ) rgb;
+};
+	#define create_struct_vertex_3d_line( x, y, z, r, g, b ) create( struct( vertex_3d_line ), .pos = { x, y, z }, .rgb = { r, g, b } )
+
+//
 
 make_struct( ind_tri )
 {
@@ -2578,10 +2642,10 @@ make_object(
 	flag update;
 	u32 update_id;
 	buffer vertex_buffer;
-	buffer index_buffer;
+	// buffer index_buffer;
 	list vertices;
-	list indices;
-	u32 vertex_n;
+	// list indices;
+	// u32 vertex_n;
 )( in form_mesh in_form )
 {
 	#ifdef hept_debug
@@ -2593,9 +2657,9 @@ make_object(
 	this->form = in_form;
 	this->update = yes;
 	this->vertices = assign_list( 0, 1, this->form->type_size, assign_ptr( this->form->type_size ) );
-	this->indices = new_list( u32 );
+	// this->indices = new_list( u32 );
 	this->vertex_buffer = new_buffer( default_form_buffer_vertex );
-	this->index_buffer = new_buffer( default_form_buffer_index );
+	// this->index_buffer = new_buffer( default_form_buffer_index );
 	//
 	#ifdef hept_trace
 	print_trace( "new mesh: ID: %d", this->pile_id );
@@ -2607,7 +2671,7 @@ make_object(
 fn delete_mesh( in mesh in_mesh )
 {
 	delete_list( in_mesh->vertices );
-	delete_list( in_mesh->indices );
+	// delete_list( in_mesh->indices );
 	unassign_mesh( in_mesh );
 }
 
@@ -2641,42 +2705,59 @@ global mesh default_mesh_window_white = null;
 global mesh default_mesh_window_black = null;
 global mesh default_mesh_window_tex = null;
 
-	#define mesh_add_line( var, vertex_struct, a, b )         \
-		DEF_START                                               \
-		list_add( var->indices, u32, var->vertices->size );     \
-		list_add( var->indices, u32, var->vertices->size + 1 ); \
-		list_add( var->vertices, vertex_struct, a );            \
-		list_add( var->vertices, vertex_struct, b );            \
+	#define mesh_add_point( var, vertex_struct, p ) \
+		DEF_START                                     \
+		list_add( var->vertices, vertex_struct, p );  \
 		DEF_END
 
-	#define mesh_add_tri( var, vertex_struct, a, b, c )       \
-		DEF_START                                               \
-		list_add( var->indices, u32, var->vertices->size );     \
-		list_add( var->indices, u32, var->vertices->size + 1 ); \
-		list_add( var->indices, u32, var->vertices->size + 2 ); \
-		list_add( var->vertices, vertex_struct, a );            \
-		list_add( var->vertices, vertex_struct, b );            \
-		list_add( var->vertices, vertex_struct, c );            \
+	#define mesh_add_line( var, vertex_struct, a, b ) \
+		DEF_START                                       \
+		mesh_add_point( var, vertex_struct, a );        \
+		mesh_add_point( var, vertex_struct, b );        \
+		DEF_END
+
+	#define mesh_add_tri( var, vertex_struct, a, b, c ) \
+		DEF_START                                         \
+		mesh_add_point( var, vertex_struct, a );          \
+		mesh_add_point( var, vertex_struct, b );          \
+		mesh_add_point( var, vertex_struct, c );          \
 		DEF_END
 
 	#define mesh_add_quad( var, vertex_struct, tl, tr, br, bl ) \
 		DEF_START                                                 \
-		list_add( var->indices, u32, var->vertices->size );       \
-		list_add( var->indices, u32, var->vertices->size + 1 );   \
-		list_add( var->indices, u32, var->vertices->size + 2 );   \
-		list_add( var->indices, u32, var->vertices->size );       \
-		list_add( var->indices, u32, var->vertices->size + 2 );   \
-		list_add( var->indices, u32, var->vertices->size + 3 );   \
-		list_add( var->vertices, vertex_struct, tl );             \
-		list_add( var->vertices, vertex_struct, tr );             \
-		list_add( var->vertices, vertex_struct, br );             \
-		list_add( var->vertices, vertex_struct, bl );             \
+		mesh_add_tri( var, vertex_struct, tl, tr, br );           \
+		mesh_add_tri( var, vertex_struct, tl, br, bl );           \
 		DEF_END
+
+fn mesh_add_mesh_3d( in mesh a, in mesh b, in struct( fvec3 ) offset )
+{
+	u32 vs = a->vertices->size;
+
+	/*ter_list( b->indices, i )
+	{
+		list_add(
+			a->indices,
+			u32,
+			vs + list_get( b->indices, u32, i )
+		);
+	}*/
+
+	iter_list( b->vertices, v )
+	{
+		struct( vertex_3d_tri ) temp = list_get( b->vertices, struct( vertex_3d_tri ), v );
+		temp.pos = fvec3_add( temp.pos, offset );
+		list_add(
+			a->vertices,
+			struct( vertex_3d_tri ),
+			temp
+		);
+	}
+}
 
 fn update_mesh( in mesh in_mesh )
 {
 	update_buffer( in_mesh->vertex_buffer, in_mesh->vertices->size * in_mesh->vertices->size_type, in_mesh->vertices->data );
-	update_buffer( in_mesh->index_buffer, in_mesh->indices->size * in_mesh->indices->size_type, in_mesh->indices->data );
+	// update_buffer( in_mesh->index_buffer, in_mesh->indices->size * in_mesh->indices->size_type, in_mesh->indices->data );
 }
 
 //
@@ -2786,7 +2867,7 @@ make_object(
 
 fn delete_module( in module in_module )
 {
-	vkDestroyShaderModule(current_os_machine->device,in_module->shader_module,null);
+	vkDestroyShaderModule( current_os_machine->device, in_module->shader_module, null );
 	unassign_module( in_module );
 }
 
@@ -2909,8 +2990,8 @@ make_object(
 
 fn delete_shader_input( in shader_input in_shader_input )
 {
-	vkFreeDescriptorSets(current_os_machine->device,in_shader_input->descriptor_pool,3,in_shader_input->descriptors);
-	vkDestroyDescriptorPool(current_os_machine->device,in_shader_input->descriptor_pool,null);
+	vkFreeDescriptorSets( current_os_machine->device, in_shader_input->descriptor_pool, 3, in_shader_input->descriptors );
+	vkDestroyDescriptorPool( current_os_machine->device, in_shader_input->descriptor_pool, null );
 	unassign_shader_input( in_shader_input );
 }
 
@@ -2956,8 +3037,8 @@ make_struct( shader_input_image_ticket )
 
 fn update_shader_input_storage( in shader_input in_shader_input, in u8 in_binding, in buffer in_buffer )
 {
-	lock_pile(shader_input_storage_tickets);
-	lock_shader_input(in_shader_input);
+	// lock_pile(shader_input_storage_tickets);
+	// lock_shader_input(in_shader_input);
 	in_shader_input->descriptor_updates[ 0 ] = yes;
 	in_shader_input->descriptor_updates[ 1 ] = yes;
 	in_shader_input->descriptor_updates[ 2 ] = yes;
@@ -2982,15 +3063,15 @@ fn update_shader_input_storage( in shader_input in_shader_input, in u8 in_bindin
 		ticket_ptr->binding = in_binding;
 		ticket_ptr->buffer = in_buffer;
 	}
-	unlock_shader_input(in_shader_input);
-	unlock_pile(shader_input_storage_tickets);
+	// unlock_shader_input(in_shader_input);
+	// unlock_pile(shader_input_storage_tickets);
 }
 
 fn process_shader_input_storage_ticket( ptr( struct( shader_input_storage_ticket ) ) in_ticket )
 {
 	shader_input this_shader_input = in_ticket->input;
 
-	lock_shader_input(this_shader_input);
+	// lock_shader_input(this_shader_input);
 
 	if(
 		( this_shader_input->descriptor_updates[ 0 ] == no ) and
@@ -3000,30 +3081,30 @@ fn process_shader_input_storage_ticket( ptr( struct( shader_input_storage_ticket
 	{
 		pile_delete( shader_input_storage_tickets, struct( shader_input_storage_ticket ), this_shader_input->ticket_storage_id );
 		this_shader_input->ticket_storage_id = -1;
-		unlock_shader_input(this_shader_input);
+		// unlock_shader_input(this_shader_input);
 		out;
 	}
 
 	ifn( this_shader_input->descriptor_updates[ in_ticket->frame ] )
 	{
-		unlock_shader_input(this_shader_input);
+		// unlock_shader_input(this_shader_input);
 		out;
 	}
-	if(in_ticket->buffer == null or in_ticket->buffer->buffer == null)
+	if( in_ticket->buffer == null or in_ticket->buffer->buffer == null )
 	{
-		unlock_shader_input(this_shader_input);
+		// unlock_shader_input(this_shader_input);
 		out;
 	}
 
 	H_update_descriptor_set_storage( in_ticket->binding, current_os_machine->device, this_shader_input->descriptors[ in_ticket->frame ], in_ticket->buffer->buffer, in_ticket->buffer->size );
 	this_shader_input->descriptor_updates[ in_ticket->frame ] = no;
-	unlock_shader_input(this_shader_input);
+	// unlock_shader_input(this_shader_input);
 }
 
 fn update_shader_input_image( in shader_input in_shader_input, in u8 in_binding, in image in_image )
 {
-	lock_pile(shader_input_image_tickets);
-	lock_shader_input(in_shader_input);
+	// lock_pile(shader_input_image_tickets);
+	// lock_shader_input(in_shader_input);
 	in_shader_input->descriptor_updates[ 0 ] = yes;
 	in_shader_input->descriptor_updates[ 1 ] = yes;
 	in_shader_input->descriptor_updates[ 2 ] = yes;
@@ -3048,15 +3129,15 @@ fn update_shader_input_image( in shader_input in_shader_input, in u8 in_binding,
 		ticket_ptr->binding = in_binding;
 		ticket_ptr->image = in_image;
 	}
-	unlock_shader_input(in_shader_input);
-	unlock_pile(shader_input_image_tickets);
+	// unlock_shader_input(in_shader_input);
+	// unlock_pile(shader_input_image_tickets);
 }
 
 fn process_shader_input_image_ticket( ptr( struct( shader_input_image_ticket ) ) in_ticket )
 {
 	shader_input this_shader_input = in_ticket->input;
 
-	lock_shader_input(this_shader_input);
+	// lock_shader_input(this_shader_input);
 
 	if(
 		( this_shader_input->descriptor_updates[ 0 ] == no ) and
@@ -3066,24 +3147,24 @@ fn process_shader_input_image_ticket( ptr( struct( shader_input_image_ticket ) )
 	{
 		pile_delete( shader_input_image_tickets, struct( shader_input_image_ticket ), this_shader_input->ticket_image_id );
 		this_shader_input->ticket_image_id = -1;
-		unlock_shader_input(this_shader_input);
+		// unlock_shader_input(this_shader_input);
 		out;
 	}
 
 	ifn( this_shader_input->descriptor_updates[ in_ticket->frame ] )
 	{
-		unlock_shader_input(this_shader_input);
+		// unlock_shader_input(this_shader_input);
 		out;
 	}
-	if(in_ticket->image == null or in_ticket->image->image == null)
+	if( in_ticket->image == null or in_ticket->image->image == null )
 	{
-		unlock_shader_input(this_shader_input);
+		// unlock_shader_input(this_shader_input);
 		out;
 	}
 
 	H_update_descriptor_set_image( in_ticket->binding, current_os_machine->device, this_shader_input->descriptors[ in_ticket->frame ], in_ticket->image->form->sampler, in_ticket->image->view );
 	this_shader_input->descriptor_updates[ in_ticket->frame ] = no;
-	unlock_shader_input(this_shader_input);
+	// unlock_shader_input(this_shader_input);
 }
 
 //
@@ -3163,7 +3244,7 @@ make_object(
 	this->info_assembly = H_create_struct_pipeline_assembly( this->form->topology, no );
 
 	this->info_raster = H_create_struct_pipeline_raster(
-		no,
+		yes,
 		no,
 		VK_POLYGON_MODE_FILL,
 		VK_CULL_MODE_BACK_BIT,
@@ -3261,11 +3342,11 @@ make_object(
 
 fn delete_shader( in shader in_shader )
 {
-	//copied stuff!!
-	//if(in_shader->pipeline_layout != null) vkDestroyPipelineLayout(current_os_machine->device,in_shader->pipeline_layout,null);
-	if(in_shader->pipeline != null) vkDestroyPipeline(current_os_machine->device,in_shader->pipeline,null);
-	//delete_list( in_shader->modules );
-	//delete_list( in_shader->stages );
+	// copied stuff!!
+	// if(in_shader->pipeline_layout != null) vkDestroyPipelineLayout(current_os_machine->device,in_shader->pipeline_layout,null);
+	if( in_shader->pipeline != null ) vkDestroyPipeline( current_os_machine->device, in_shader->pipeline, null );
+	// delete_list( in_shader->modules );
+	// delete_list( in_shader->stages );
 	unassign_shader( in_shader );
 }
 
@@ -3413,7 +3494,7 @@ fn use_image_src( in image in_image, in flag in_preserve_contents )
 		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
 		H_image_layout_shader_read_only_optimal,
 		in_image->image,
-		VK_IMAGE_ASPECT_COLOR_BIT,
+		in_image->form->type,
 		0,
 		1,
 		0,
@@ -3443,7 +3524,7 @@ fn use_image_dst( in image in_image, in flag in_preserve_contents )
 		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
 		H_image_layout_color_attachment_optimal,
 		in_image->image,
-		VK_IMAGE_ASPECT_COLOR_BIT,
+		in_image->form->type,
 		0,
 		1,
 		0,
@@ -3465,6 +3546,36 @@ fn use_image_dst( in image in_image, in flag in_preserve_contents )
 	);
 }
 
+fn use_image_dst_depth( in image in_image, in flag in_preserve_contents )
+{
+	H_image_barrier temp_barrier = H_create_image_barrier(
+		0,
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
+		H_image_layout_depth_stencil_attachment_optimal,
+		in_image->image,
+		in_image->form->type,
+		0,
+		1,
+		0,
+		1
+	);
+	in_image->layout = temp_barrier.newLayout;
+
+	vkCmdPipelineBarrier(
+		current_command_buffer,
+		H_pipeline_stage_top_of_pipe,
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		0,
+		0,
+		NULL,
+		0,
+		NULL,
+		1,
+		ref( temp_barrier )
+	);
+}
+
 fn use_image_blit_src( in image in_image, in flag in_preserve_contents )
 {
 	H_image_barrier temp_barrier = H_create_image_barrier(
@@ -3473,7 +3584,7 @@ fn use_image_blit_src( in image in_image, in flag in_preserve_contents )
 		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
 		H_image_layout_transfer_src_optimal,
 		in_image->image,
-		VK_IMAGE_ASPECT_COLOR_BIT,
+		in_image->form->type,
 		0,
 		1,
 		0,
@@ -3503,7 +3614,37 @@ fn use_image_blit_dst( in image in_image, in flag in_preserve_contents )
 		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
 		H_image_layout_transfer_dst_optimal,
 		in_image->image,
-		VK_IMAGE_ASPECT_COLOR_BIT,
+		in_image->form->type,
+		0,
+		1,
+		0,
+		1
+	);
+	in_image->layout = temp_barrier.newLayout;
+
+	vkCmdPipelineBarrier(
+		current_command_buffer,
+		H_pipeline_stage_top_of_pipe,
+		H_pipeline_stage_transfer,
+		0,
+		0,
+		NULL,
+		0,
+		NULL,
+		1,
+		ref( temp_barrier )
+	);
+}
+
+fn use_image_blit_dst_depth( in image in_image, in flag in_preserve_contents )
+{
+	H_image_barrier temp_barrier = H_create_image_barrier(
+		0,
+		VK_ACCESS_TRANSFER_WRITE_BIT,
+		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
+		H_image_layout_transfer_dst_optimal,
+		in_image->image,
+		in_image->form->type,
 		0,
 		1,
 		0,
@@ -3533,7 +3674,7 @@ fn use_image_present( in image in_image, in flag in_preserve_contents )
 		( in_preserve_contents ) ? ( in_image->layout ) : H_image_layout_undefined,
 		H_image_layout_present_src_KHR,
 		in_image->image,
-		VK_IMAGE_ASPECT_COLOR_BIT,
+		in_image->form->type,
 		0,
 		1,
 		0,
@@ -3560,12 +3701,12 @@ fn use_image_present( in image in_image, in flag in_preserve_contents )
 fn clear_image( in image in_image )
 {
 	use_image_blit_dst( in_image, no );
-		
+
 	VkClearColorValue clearColor;
-	clearColor.float32[0] = 0.0f;
-	clearColor.float32[1] = 0.0f;
-	clearColor.float32[2] = 0.0f;
-	clearColor.float32[3] = 0.0f;
+	clearColor.float32[ 0 ] = 0.0f;
+	clearColor.float32[ 1 ] = 0.0f;
+	clearColor.float32[ 2 ] = 0.0f;
+	clearColor.float32[ 3 ] = 0.0f;
 
 	VkImageSubresourceRange imageRange;
 	imageRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -3575,10 +3716,33 @@ fn clear_image( in image in_image )
 	imageRange.layerCount = 1;
 
 	vkCmdClearColorImage(
-		current_command_buffer, 
-		in_image->image, 
-		in_image->layout, 
+		current_command_buffer,
+		in_image->image,
+		in_image->layout,
 		&clearColor,
+		1,
+		&imageRange
+	);
+}
+
+fn clear_depth( in image in_image )
+{
+	VkClearDepthStencilValue clearDepth;
+	clearDepth.depth = 1.0f;
+	clearDepth.stencil = 0;
+
+	VkImageSubresourceRange imageRange;
+	imageRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	imageRange.baseMipLevel = 0;
+	imageRange.levelCount = 1;
+	imageRange.baseArrayLayer = 0;
+	imageRange.layerCount = 1;
+
+	vkCmdClearDepthStencilImage(
+		current_command_buffer,
+		in_image->image,
+		in_image->layout,
+		&clearDepth,
 		1,
 		&imageRange
 	);
@@ -3610,15 +3774,15 @@ fn start_shader( in shader in_shader, in u32 in_width, in u32 in_height )
 	vkCmdBeginRenderPass( current_command_buffer, ref( current_frame->info_begin ), VK_SUBPASS_CONTENTS_INLINE );
 	vkCmdBindPipeline( current_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline );
 
-	set_current_shader_input(null);
+	set_current_shader_input( null );
 }
 
 fn use_shader_input( in shader_input in_shader_input )
 {
-	set_current_shader_input(in_shader_input);
-	lock_shader_input(in_shader_input);
+	set_current_shader_input( in_shader_input );
+	// lock_shader_input(in_shader_input);
 	vkCmdBindDescriptorSets( current_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, current_shader->pipeline_layout, 0, 1, ref( in_shader_input->descriptors[ current_renderer->current_frame ] ), 0, NULL );
-	unlock_shader_input(in_shader_input);
+	// unlock_shader_input(in_shader_input);
 }
 
 fn use_constants( in u32 in_size, in ptr( pure ) in_data )
@@ -3646,13 +3810,13 @@ fn end_shader()
 
 fn draw_instanced_mesh( in mesh in_mesh, in u32 in_count )
 {
-	if(in_count == 0) out;
-	if( in_mesh->vertex_buffer->buffer == null or in_mesh->index_buffer->buffer == null) out;
-	//if( current_shader_input->descriptor_updates[current_renderer->current_frame] == no ) out;
+	if( in_count == 0 ) out;
+	if( in_mesh->vertex_buffer->buffer == null ) out;
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers( current_renderer->command_buffers[ current_renderer->current_frame ], 0, 1, ref( in_mesh->vertex_buffer->buffer ), offsets );
-	vkCmdBindIndexBuffer( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32 );
-	vkCmdDrawIndexed( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->indices->size, in_count, 0, 0, 0 );
+	// vkCmdBindIndexBuffer( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32 );
+	// vkCmdDrawIndexed( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->indices->size, in_count, 0, 0, 0 );
+	vkCmdDraw( current_renderer->command_buffers[ current_renderer->current_frame ], in_mesh->vertices->size, in_count, 0, 0 );
 }
 
 fn draw_mesh( in mesh in_mesh )
@@ -3770,6 +3934,138 @@ fn perform_event( in event in_event )
 
 //
 
+// audio
+// -------
+// does thing
+
+HWAVEOUT hWaveOut; // Audio device handle
+WAVEFORMATEX wfx;  // Audio format
+global list sounds = null; // Linked list of playing sounds
+
+void init_audio() {
+	// Initialize WAVE format descriptor
+	wfx.nSamplesPerSec = 44100; // sample rate
+	wfx.wBitsPerSample = 16;   // bits per sample
+	wfx.nChannels = 2;         // number of channels
+	wfx.cbSize = 0;            // size of extra info
+	wfx.wFormatTag = WAVE_FORMAT_PCM;
+	wfx.nBlockAlign = wfx.nChannels * wfx.wBitsPerSample / 8;
+	wfx.nAvgBytesPerSec = wfx.nBlockAlign * wfx.nSamplesPerSec;
+
+	// Open audio device
+	if (waveOutOpen(&hWaveOut, WAVE_MAPPER, &wfx, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
+		fprintf(stderr, "Error opening audio device.\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void cleanup_audio() {
+	if (waveOutClose(hWaveOut) != MMSYSERR_NOERROR) {
+		fprintf(stderr, "Error closing audio device.\n");
+		// You might want to exit or handle the error here
+	}
+}
+
+
+make_object(
+	sound,
+	WAVEHDR header;
+	//struct Sound *next;
+)(  )
+{
+	#ifdef hept_debug
+	//print_error( in_type == event_type_null, "event: in_type is null" );
+	#endif
+	//
+	sound this = assign_sound();
+	//
+
+	//
+	#ifdef hept_trace
+	print_trace( "new sound: ID: %d", this->pile_id );
+	#endif
+	//
+	out this;
+}
+
+BOOL load_audio(const char *filename, BYTE **data, DWORD *length) {
+	FILE *file = fopen(filename, "rb");
+	if (!file) {
+		fprintf(stderr, "Error opening audio file: %s\n", filename);
+		return FALSE;
+	}
+
+	fseek(file, 0, SEEK_END);
+	long fileSize = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	// Skip the WAV header (44 bytes)
+	fseek(file, 44, SEEK_SET);
+	*length = fileSize - 44;
+
+	*data = (BYTE *)malloc(*length);
+	if (!*data) {
+		fprintf(stderr, "Error allocating memory for audio data.\n");
+		fclose(file);
+		return FALSE;
+	}
+
+	fread(*data, 1, *length, file);
+	fclose(file);
+
+	return TRUE;
+}
+
+void play_sound(const BYTE *data, DWORD length) {
+	sound sound = new_ptr(struct(sound),1);
+
+	// Set up the WAVEHDR
+	sound->header.lpData = (LPSTR)data;
+	sound->header.dwBufferLength = length;
+	sound->header.dwFlags = 0;
+	sound->header.dwLoops = 0;
+
+	// Prepare the header
+	if (waveOutPrepareHeader(hWaveOut, &sound->header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
+		fprintf(stderr, "Error preparing header.\n");
+		free(sound);
+		return;
+	}
+
+	// Play the sound
+	if (waveOutWrite(hWaveOut, &sound->header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
+		fprintf(stderr, "Error playing sound.\n");
+		waveOutUnprepareHeader(hWaveOut, &sound->header, sizeof(WAVEHDR));
+		free(sound);
+		return;
+	}
+
+	// Add the sound to the list of playing sounds
+	// (You need to implement sound list management)
+}
+
+void stop_sound(in sound sound) {
+	// Stop the sound
+	if (waveOutReset(hWaveOut) != MMSYSERR_NOERROR) {
+		fprintf(stderr, "Error stopping sound.\n");
+	}
+
+	// Unprepare the header
+	if (waveOutUnprepareHeader(hWaveOut, &sound->header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
+		fprintf(stderr, "Error unpreparing header.\n");
+	}
+
+	// Remove the sound from the list of playing sounds
+	// (You need to implement sound list management)
+
+	// Free the sound structure
+	free(sound);
+}
+
+/////// /////// /////// /////// /////// /////// ///////
+
+//
+
 global text main_path = null;
 global text main_data_path = null;
 global text main_shader_path = null;
@@ -3781,10 +4077,17 @@ global s32 main_width = 0;
 global s32 main_height = 0;
 global f32 main_window_width = 0;
 global f32 main_window_height = 0;
+global f32 main_window_scale = 1;
 global f32 main_scale = 1;
+global f32 main_fps = 120;
+global flag main_cursor_visible = yes;
 fn_ptr( pure, main_fn_command, pure ) = null;
 global flag main_vsync = no;
 
+global flag main_thread_ready = no;
+global flag main_thread_go = no;
+global flag main_thread_done = no;
+global spinlock main_thread_lock = 0;
 global os_thread main_thread = null;
 global os_pacer main_thread_pacer = null;
 global flag main_thread_exit = no;
@@ -3798,8 +4101,21 @@ global ptr( struct( input ) ) inputs;
 global ptr( u16 ) input_updates;
 global u8 input_update_ptr = 0;
 
+global s32 mouse_prev_x = 0;
+global s32 mouse_prev_y = 0;
 global s32 mouse_x = 0;
 global s32 mouse_y = 0;
+
+global s32 main_mouse_window_x = 0;
+global s32 main_mouse_window_y = 0;
+
+global s32 main_mouse_wheel_x = 0;
+global s32 main_mouse_wheel_y = 0;
+
+global s32 mouse_window_prev_x = 0;
+global s32 mouse_window_prev_y = 0;
+global s32 mouse_window_x = 0;
+global s32 mouse_window_y = 0;
 
 //
 
@@ -3815,28 +4131,28 @@ global s32 mouse_y = 0;
 
 	#if OS_WINDOWS
 
-inl s32 os_get_mouse_button(UINT u_msg)
+inl s32 os_get_mouse_button( UINT u_msg )
 {
-    switch (u_msg)
-    {
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONUP:
-        return 511;
-    case WM_RBUTTONDOWN:
-    case WM_RBUTTONUP:
-        return 510;
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONUP:
-        return 509;
-    default:
-        return -1;  // Error or unknown button, handle accordingly
-    }
+	switch( u_msg )
+	{
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONUP:
+		return 511;
+	case WM_RBUTTONDOWN:
+	case WM_RBUTTONUP:
+		return 510;
+	case WM_MBUTTONDOWN:
+	case WM_MBUTTONUP:
+		return 509;
+	default:
+		return -1;
+	}
 }
 
 inl LRESULT CALLBACK process_os_window( HWND hwnd, UINT u_msg, WPARAM w_param, LPARAM l_param )
 {
-	s32 button = os_get_mouse_button(u_msg);
-	if(button == -1) button = w_param;
+	s32 button = os_get_mouse_button( u_msg );
+	if( button == -1 ) button = w_param;
 
 	with( u_msg )
 	{
@@ -3845,12 +4161,31 @@ inl LRESULT CALLBACK process_os_window( HWND hwnd, UINT u_msg, WPARAM w_param, L
 			safe_flag_set( hept_exit, yes );
 			out 0;
 		}
-		
+
+		//
+
+		is( WM_SETCURSOR )
+		{
+			if( LOWORD( l_param ) == HTCLIENT )
+			{
+				if( main_cursor_visible )
+					SetCursor( LoadCursor( NULL, IDC_ARROW ) );
+				else
+					SetCursor( NULL );
+				out TRUE;
+			}
+			else
+			{
+				out DefWindowProc( hwnd, u_msg, w_param, l_param );
+			}
+			skip;
+		}
+
 		is( WM_LBUTTONDOWN )
-		is( WM_RBUTTONDOWN )
-		is( WM_MBUTTONDOWN )
-		is( WM_KEYDOWN )
-		is( WM_SYSKEYDOWN )
+			is( WM_RBUTTONDOWN )
+				is( WM_MBUTTONDOWN )
+					is( WM_KEYDOWN )
+						is( WM_SYSKEYDOWN )
 		{
 			if( safe_flag_get( inputs[ button ].held ) == no )
 			{
@@ -3860,14 +4195,14 @@ inl LRESULT CALLBACK process_os_window( HWND hwnd, UINT u_msg, WPARAM w_param, L
 				safe_u8_inc( input_update_ptr );
 			}
 			safe_flag_set( inputs[ button ].held, yes );
-			skip;
+			out 1;
 		}
 
 		is( WM_LBUTTONUP )
-		is( WM_RBUTTONUP )
-		is( WM_MBUTTONUP )
-		is( WM_KEYUP )
-			is( WM_SYSKEYUP )
+			is( WM_RBUTTONUP )
+				is( WM_MBUTTONUP )
+					is( WM_KEYUP )
+						is( WM_SYSKEYUP )
 		{
 			if( safe_flag_get( inputs[ button ].held ) )
 			{
@@ -3877,39 +4212,48 @@ inl LRESULT CALLBACK process_os_window( HWND hwnd, UINT u_msg, WPARAM w_param, L
 				safe_u16_set( input_updates[ safe_u8_get( input_update_ptr ) ], button );
 				safe_u8_inc( input_update_ptr );
 			}
-			skip;
+			out 1;
 		}
-		/*
-		is( WM_LBUTTONDOWN )
-		is( WM_RBUTTONDOWN )
-		is( WM_MBUTTONDOWN )
-		{
-			s32 button = os_get_mouse_button(u_msg);
-			if( safe_flag_get( inputs[ button ].held ) == no )
-			{
-				safe_flag_set( inputs[ button ].pressed, yes );
-				safe_flag_set( inputs[ button ].released, no );
-				safe_u16_set( input_updates[ safe_u8_get( input_update_ptr ) ], button );
-				safe_u8_inc( input_update_ptr );
-			}
-			safe_flag_set( inputs[ button ].held, yes );
-			skip;
-		}
-
-		is( WM_LBUTTONUP )
-		is( WM_RBUTTONUP )
-		is( WM_MBUTTONUP )
-		{
-			safe_flag_set( mouse[ _get_button(w_param) ].released, yes );
-			safe_flag_set( mouse[ _get_button(w_param) ].held, no );
-			skip;
-		}*/
 
 		is( WM_MOUSEMOVE )
 		{
-			safe_s32_set( mouse_x, ((int)(short)LOWORD(l_param)) );
-			safe_s32_set( mouse_y, ((int)(short)HIWORD(l_param)) );
-			skip;
+			safe_s32_set(
+				main_mouse_window_x,
+				( ( int )( short )LOWORD( l_param ) ) -
+					( ( current_renderer->swapchain_extent.width - (main_window_width ) ) / 2 )
+			);
+			safe_s32_set(
+				main_mouse_window_y,
+				( ( int )( short )HIWORD( l_param ) ) -
+					( ( current_renderer->swapchain_extent.height - (main_window_height ) ) / 2 )
+			);
+			out 1;
+		}
+
+		is( WM_MOUSEHWHEEL )
+		{
+			if(GET_WHEEL_DELTA_WPARAM(w_param) > 0)
+			{
+				safe_s32_set(main_mouse_wheel_x, 1);
+			}
+			else
+			{
+				safe_s32_set(main_mouse_wheel_x, -1);
+			}
+			out 1;
+		}
+
+		is( WM_MOUSEWHEEL )
+		{
+			if(GET_WHEEL_DELTA_WPARAM(w_param) > 0)
+			{
+				safe_s32_set(main_mouse_wheel_y, 1);
+			}
+			else
+			{
+				safe_s32_set(main_mouse_wheel_y, -1);
+			}
+			out 1;
 		}
 
 	default:
@@ -3919,13 +4263,92 @@ inl LRESULT CALLBACK process_os_window( HWND hwnd, UINT u_msg, WPARAM w_param, L
 	out 0;
 }
 	#elif OS_LINUX
-void process_os_window( ptr( Display ) in_disp, Window in_win )
+
+s32 map_key_for_x11( Display* in_disp, KeyCode keycode )
+{
+	// Convert the keycode to a keysym using XkbKeycodeToKeysym
+	KeySym keysym = XkbKeycodeToKeysym( in_disp, keycode, 0, 0 );
+
+	switch( keysym )
+	{
+	// Map alphanumeric keys
+	case XK_A:
+	case XK_a: return 'A';
+	case XK_B:
+	case XK_b: return 'B';
+	case XK_C:
+	case XK_c: return 'C';
+	case XK_D:
+	case XK_d: return 'D';
+	case XK_E:
+	case XK_e: return 'E';
+	case XK_F:
+	case XK_f: return 'F';
+	case XK_G:
+	case XK_g: return 'G';
+	case XK_H:
+	case XK_h: return 'H';
+	case XK_I:
+	case XK_i: return 'I';
+	case XK_J:
+	case XK_j: return 'J';
+	case XK_K:
+	case XK_k: return 'K';
+	case XK_L:
+	case XK_l: return 'L';
+	case XK_M:
+	case XK_m: return 'M';
+	case XK_N:
+	case XK_n: return 'N';
+	case XK_O:
+	case XK_o: return 'O';
+	case XK_P:
+	case XK_p: return 'P';
+	case XK_Q:
+	case XK_q: return 'Q';
+	case XK_R:
+	case XK_r: return 'R';
+	case XK_S:
+	case XK_s: return 'S';
+	case XK_T:
+	case XK_t: return 'T';
+	case XK_U:
+	case XK_u: return 'U';
+	case XK_V:
+	case XK_v: return 'V';
+	case XK_W:
+	case XK_w: return 'W';
+	case XK_X:
+	case XK_x: return 'X';
+	case XK_Y:
+	case XK_y: return 'Y';
+	case XK_Z:
+	case XK_z: return 'Z';
+
+	// Map number keys
+	case XK_0: return '0';
+	case XK_1: return '1';
+	case XK_2: return '2';
+	case XK_3: return '3';
+	case XK_4: return '4';
+	case XK_5: return '5';
+	case XK_6: return '6';
+	case XK_7: return '7';
+	case XK_8: return '8';
+	case XK_9: return '9';
+
+	default: return -1; // Unmapped key
+	}
+}
+
+void process_os_window( Display* in_disp, Window in_win )
 {
 	XEvent e;
 	u32 custom_key;
-	as( XPending( in_disp ) )
+
+	while( XPending( in_disp ) )
 	{
-		XNextEvent( in_disp, ref( e ) );
+		XNextEvent( in_disp, &e );
 
 		with( e.type )
 		{
@@ -3934,16 +4357,87 @@ void process_os_window( ptr( Display ) in_disp, Window in_win )
 				safe_flag_set( hept_exit, yes );
 				out;
 			}
-			/*is( ConfigureNotify )
+
+			is( ButtonPress )
+				is( ButtonRelease )
 			{
-				update_renderer( current_renderer );
-				hept_update();
-				out;
-			}*/
+				s32 button = -1;
+				switch( e.xbutton.button )
+				{
+				case Button1: button = 511; break; // Left mouse button
+				case Button2: button = 509; break; // Middle mouse button
+				case Button3: button = 510; break; // Right mouse button
+				}
+
+				if( button != -1 )
+				{
+					if( e.type == ButtonPress )
+					{
+						if( safe_flag_get( inputs[ button ].held ) == no )
+						{
+							safe_flag_set( inputs[ button ].pressed, yes );
+							safe_flag_set( inputs[ button ].released, no );
+							safe_u16_set( input_updates[ safe_u8_get( input_update_ptr ) ], button );
+							safe_u8_inc( input_update_ptr );
+						}
+						safe_flag_set( inputs[ button ].held, yes );
+					}
+					else if( e.type == ButtonRelease )
+					{
+						if( safe_flag_get( inputs[ button ].held ) )
+						{
+							safe_flag_set( inputs[ button ].held, no );
+							safe_flag_set( inputs[ button ].pressed, no );
+							safe_flag_set( inputs[ button ].released, yes );
+							safe_u16_set( input_updates[ safe_u8_get( input_update_ptr ) ], button );
+							safe_u8_inc( input_update_ptr );
+						}
+					}
+				}
+			}
+
+			is( KeyPress )
+				is( KeyRelease )
+			{
+				// Here you'll need a way to map X11 key codes to your custom keys.
+				// Let's assume you have a function map_key_for_x11 that does this.
+				s32 button = map_key_for_x11( in_disp, e.xkey.keycode ); // e.xkey.keycode;
+				if( e.type == KeyPress )
+				{
+					if( safe_flag_get( inputs[ button ].held ) == no )
+					{
+						safe_flag_set( inputs[ button ].pressed, yes );
+						safe_flag_set( inputs[ button ].released, no );
+						safe_u16_set( input_updates[ safe_u8_get( input_update_ptr ) ], button );
+						safe_u8_inc( input_update_ptr );
+					}
+					safe_flag_set( inputs[ button ].held, yes );
+				}
+				else if( e.type == KeyRelease )
+				{
+					if( safe_flag_get( inputs[ button ].held ) )
+					{
+						safe_flag_set( inputs[ button ].held, no );
+						safe_flag_set( inputs[ button ].pressed, no );
+						safe_flag_set( inputs[ button ].released, yes );
+						safe_u16_set( input_updates[ safe_u8_get( input_update_ptr ) ], button );
+						safe_u8_inc( input_update_ptr );
+					}
+				}
+			}
+
+			is( MotionNotify )
+			{
+				// Assuming you have similar variables for main_mouse_window_x and main_mouse_window_y
+				safe_s32_set( main_mouse_window_x, e.xmotion.x );
+				safe_s32_set( main_mouse_window_y, e.xmotion.y );
+			}
+
 		default: skip;
 		}
 	}
 }
+
 	#endif
 
 //
@@ -3994,7 +4488,7 @@ fn update_os_machines()
 					this_machine->queue_index = q;
 					flag supports_present = H_get_gpu_supports_present( gpus[ g ], q, current_os_window->surface );
 
-					if( supports_present and H_check_gpu_queue_render( queues[ q ] ) and H_check_gpu_queue_compute( queues[ q ] ) )
+					if( supports_present and H_check_gpu_queue_render( queues[ q ] ) )
 					{
 						if( gpu_prop.deviceType == H_gpu_type_discrete )
 						{
@@ -4036,14 +4530,29 @@ fn update_os_machines()
 		//
 
 		text extensions[] = {
-			VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		u32 extension_count = 1;
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+			VK_EXT_MEMORY_BUDGET_EXTENSION_NAME };
+		u32 extension_count = 2;
 
 		H_struct_device info_device = H_create_struct_device( 1, ref( device_queue ), extension_count, ( ptr( const char ) ptr( const ) )extensions, ref( features ) );
 
 		this_machine->device = H_new_device( this_machine->gpu, info_device );
 
 		this_machine->memory_properties = H_get_gpu_memory_properties( this_machine->gpu );
+
+		//
+
+		VkPhysicalDeviceMemoryBudgetPropertiesEXT memoryBudget = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT };
+		VkPhysicalDeviceMemoryProperties2 memProperties2 = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+			.pNext = &memoryBudget };
+		vkGetPhysicalDeviceMemoryProperties2( this_machine->gpu, &memProperties2 );
+
+		for( uint32_t i = 0; i < memProperties2.memoryProperties.memoryHeapCount; i++ )
+		{
+			printf( "Heap %d: Budget = %llu, Usage = %llu\n", i, memoryBudget.heapBudget[ i ], memoryBudget.heapUsage[ i ] );
+		}
 	}
 }
 
@@ -4064,6 +4573,8 @@ fn update_os_windows()
 		if( this_window == null ) next;
 		else
 			window_n++;
+
+			//
 
 			//
 
@@ -4178,6 +4689,8 @@ fn update_renderers()
 
 		//
 
+		// lock_renderer( this_renderer );
+
 		H_wait_fence( current_os_machine->device, this_renderer->flight_fences[ this_renderer->current_frame ] );
 
 		//
@@ -4201,8 +4714,11 @@ fn update_renderers()
 
 		//
 
+		vacate_spinlock( main_thread_lock );
+		sleep_ns( 1 );
+		engage_spinlock( main_thread_lock );
 		{
-			lock_pile(buffer_tickets);
+			// lock_pile(buffer_tickets);
 			ptr( struct( buffer_ticket ) ) this_ticket = null;
 			u32 ticket_n = 0;
 			u32 pile_size = buffer_tickets->size;
@@ -4211,19 +4727,19 @@ fn update_renderers()
 			{
 				if( ticket_n >= pile_size ) skip;
 				this_ticket = ref( pile_find( buffer_tickets, struct( buffer_ticket ), t ) );
-				if(this_ticket->buffer == null) next;
+				if( this_ticket->buffer == null ) next;
 				else
 					ticket_n++;
 				//
 				process_buffer_ticket( this_ticket );
 			}
-			unlock_pile(buffer_tickets);
+			// unlock_pile(buffer_tickets);
 		}
 
 		//
 
 		{
-			lock_pile(shader_input_storage_tickets);
+			// lock_pile(shader_input_storage_tickets);
 			ptr( struct( shader_input_storage_ticket ) ) this_ticket = null;
 			u32 ticket_n = 0;
 			u32 pile_size = shader_input_storage_tickets->size;
@@ -4239,11 +4755,11 @@ fn update_renderers()
 				this_ticket->frame = current_renderer->current_frame;
 				process_shader_input_storage_ticket( this_ticket );
 			}
-			unlock_pile(shader_input_storage_tickets);
+			// unlock_pile(shader_input_storage_tickets);
 		}
 
 		{
-			lock_pile(shader_input_image_tickets);
+			// lock_pile(shader_input_image_tickets);
 			ptr( struct( shader_input_image_ticket ) ) this_ticket = null;
 			u32 ticket_n = 0;
 			u32 pile_size = shader_input_image_tickets->size;
@@ -4259,21 +4775,21 @@ fn update_renderers()
 				this_ticket->frame = current_renderer->current_frame;
 				process_shader_input_image_ticket( this_ticket );
 			}
-			unlock_pile(shader_input_image_tickets);
+			// unlock_pile(shader_input_image_tickets);
 		}
 
 		//
 
-		iter_list(buffer_delete_tickets,b)
+		iter_list( buffer_delete_tickets, b )
 		{
-			if(b >= buffer_delete_tickets->size) skip;
-			ptr(struct(buffer_delete_ticket)) this_ticket = ref(list_get(buffer_delete_tickets,struct(buffer_delete_ticket),b));
+			if( b >= buffer_delete_tickets->size ) skip;
+			ptr( struct( buffer_delete_ticket ) ) this_ticket = ref( list_get( buffer_delete_tickets, struct( buffer_delete_ticket ), b ) );
 			this_ticket->count++;
-			if(this_ticket->count > 3)
+			if( this_ticket->count > 3 )
 			{
-				vkFreeMemory(current_os_machine->device,this_ticket->memory,null);
-				vkDestroyBuffer(current_os_machine->device,this_ticket->buffer,null);
-				list_delete(buffer_delete_tickets,b);
+				vkFreeMemory( current_os_machine->device, this_ticket->memory, null );
+				vkDestroyBuffer( current_os_machine->device, this_ticket->buffer, null );
+				list_delete( buffer_delete_tickets, b );
 				b--;
 			}
 		}
@@ -4285,6 +4801,7 @@ fn update_renderers()
 		//
 
 		image this_window_image = list_get( this_renderer->frame_window->images, image, 0 );
+		image this_window_depth = list_get( this_renderer->frame_window->images, image, 1 );
 
 		frame this_frame = list_get( this_renderer->frames, frame, this_renderer->current_frame );
 		image this_frame_image = list_get( this_frame->images, image, 0 );
@@ -4294,15 +4811,29 @@ fn update_renderers()
 		H_start_command_buffer( current_command_buffer, command_buffer_start_info );
 
 		set_current_frame( current_renderer->frame_window );
+		// use_image_dst( this_window_image, no );
+		// use_image_dst( this_window_depth, no );
+
+		use_image_blit_dst_depth( this_window_depth, no );
+
 		clear_image( this_window_image );
+		clear_depth( this_window_depth );
+
 		use_image_dst( this_window_image, no );
+		use_image_dst_depth( this_window_depth, no );
 
 		//
+		/*if( safe_flag_get( main_thread_ready ) )
+		{
+			once u8 F = 0;
+			if(F>=255) this_renderer->ref_window->call(); else F++;
+		}*/
+
 		this_renderer->ref_window->call();
 		//
 
 		{
-			use_image_blit_src( this_window_image, yes );
+			use_image_blit_src( this_window_image, no );
 			use_image_blit_dst( this_frame_image, no );
 
 			//
@@ -4402,6 +4933,8 @@ fn update_renderers()
 
 		H_result present_result = H_present( this_renderer->form->queue, present_info );
 
+		// unlock_renderer( this_renderer );
+
 		if( present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR )
 		{
 			refresh_renderer( this_renderer );
@@ -4444,12 +4977,11 @@ fn main_defaults()
 
 	main_path = get_folder();
 
-
 	#ifdef hept_release
-	main_data_path = new_text(main_path, 5 );
+	main_data_path = new_text( main_path, 5 );
 	join_text( main_data_path, folder_sep "data" );
 	#else
-	main_data_path = new_text(main_path,0);
+	main_data_path = new_text( main_path, 0 );
 	text temp_src = null;
 	loop
 	{
@@ -4502,15 +5034,15 @@ fn main_defaults()
 	// default forms
 
 	default_form_buffer_vertex = new_form_buffer(
-		H_buffer_usage_transfer_dst | H_buffer_usage_vertex,
+		H_buffer_usage_vertex,
 		H_memory_property_device_local | H_memory_property_host_visible | H_memory_property_host_coherent
 	);
 	default_form_buffer_index = new_form_buffer(
-		H_buffer_usage_transfer_dst | H_buffer_usage_index,
+		H_buffer_usage_index,
 		H_memory_property_device_local | H_memory_property_host_visible | H_memory_property_host_coherent
 	);
 	default_form_buffer_storage = new_form_buffer(
-		H_buffer_usage_transfer_dst | H_buffer_usage_storage,
+		H_buffer_usage_storage,
 		H_memory_property_device_local | H_memory_property_host_visible | H_memory_property_host_coherent
 	);
 	//
@@ -4522,9 +5054,18 @@ fn main_defaults()
 	default_form_frame_layer_depth = new_form_frame_layer( frame_layer_type_depth, VK_FORMAT_D32_SFLOAT );
 	default_form_frame_layer_stencil = new_form_frame_layer( frame_layer_type_stencil, VK_FORMAT_S8_UINT );
 	//
-	list layers = new_list( form_frame_layer );
-	list_add( layers, form_frame_layer, default_form_frame_layer_rgba );
-	default_form_frame = new_form_frame( frame_type_attachment, layers );
+	{
+		list layers = new_list( form_frame_layer );
+		list_add( layers, form_frame_layer, default_form_frame_layer_rgba );
+		default_form_frame = new_form_frame( frame_type_attachment, layers );
+	}
+	//
+	{
+		list layers = new_list( form_frame_layer );
+		list_add( layers, form_frame_layer, default_form_frame_layer_rgba );
+		list_add( layers, form_frame_layer, default_form_frame_layer_depth );
+		default_form_frame_depth = new_form_frame( frame_type_depth, layers );
+	}
 	//
 	default_form_renderer = new_form_renderer();
 	//
@@ -4547,11 +5088,20 @@ fn main_defaults()
 	list_add( attribs_2d_line, form_mesh_attrib, default_form_mesh_attrib_pos2 );
 	list_add( attribs_2d_line, form_mesh_attrib, default_form_mesh_attrib_rgb );
 	default_form_mesh_2d_line = new_form_mesh( attribs_2d_line, yes );
-	// list attribs_3d = new_list( form_mesh_attrib );
-	// list_add( attribs_3d, form_mesh_attrib, default_form_mesh_attrib_pos3 );
-	// list_add( attribs_3d, form_mesh_attrib, default_form_mesh_attrib_uv );
-	// list_add( attribs_3d, form_mesh_attrib, default_form_mesh_attrib_rgb );
-	// default_form_mesh_3d = new_form_mesh( attribs_3d, yes );
+
+	list attribs_3d_tri = new_list( form_mesh_attrib );
+	list_add( attribs_3d_tri, form_mesh_attrib, default_form_mesh_attrib_pos3 );
+	list_add( attribs_3d_tri, form_mesh_attrib, default_form_mesh_attrib_rgb );
+	default_form_mesh_3d_tri = new_form_mesh( attribs_3d_tri, yes );
+	list attribs_3d_tri_tex = new_list( form_mesh_attrib );
+	list_add( attribs_3d_tri_tex, form_mesh_attrib, default_form_mesh_attrib_pos3 );
+	list_add( attribs_3d_tri_tex, form_mesh_attrib, default_form_mesh_attrib_uv );
+	list_add( attribs_3d_tri_tex, form_mesh_attrib, default_form_mesh_attrib_rgb );
+	default_form_mesh_3d_tri_tex = new_form_mesh( attribs_3d_tri_tex, yes );
+	list attribs_3d_line = new_list( form_mesh_attrib );
+	list_add( attribs_3d_line, form_mesh_attrib, default_form_mesh_attrib_pos3 );
+	list_add( attribs_3d_line, form_mesh_attrib, default_form_mesh_attrib_rgb );
+	default_form_mesh_3d_line = new_form_mesh( attribs_3d_line, yes );
 	//
 	default_form_shader_stage_vert = new_form_shader_stage( shader_stage_type_vertex );
 	default_form_shader_stage_geom = new_form_shader_stage( shader_stage_type_geometry );
@@ -4564,6 +5114,13 @@ fn main_defaults()
 	default_form_module_2d_tri_tex_frag = new_form_module( default_form_shader_stage_frag, default_form_mesh_2d_tri_tex );
 	default_form_module_2d_line_vert = new_form_module( default_form_shader_stage_vert, default_form_mesh_2d_line );
 	default_form_module_2d_line_frag = new_form_module( default_form_shader_stage_frag, default_form_mesh_2d_line );
+
+	default_form_module_3d_tri_vert = new_form_module( default_form_shader_stage_vert, default_form_mesh_3d_tri );
+	default_form_module_3d_tri_frag = new_form_module( default_form_shader_stage_frag, default_form_mesh_3d_tri );
+	default_form_module_3d_tri_tex_vert = new_form_module( default_form_shader_stage_vert, default_form_mesh_3d_tri_tex );
+	default_form_module_3d_tri_tex_frag = new_form_module( default_form_shader_stage_frag, default_form_mesh_3d_tri_tex );
+	default_form_module_3d_line_vert = new_form_module( default_form_shader_stage_vert, default_form_mesh_3d_line );
+	default_form_module_3d_line_frag = new_form_module( default_form_shader_stage_frag, default_form_mesh_3d_line );
 	//
 	default_form_shader_binding_image = new_form_shader_binding( shader_binding_type_image, shader_stage_type_fragment );
 	default_form_shader_binding_storage_vert = new_form_shader_binding( shader_binding_type_storage, shader_stage_type_vertex );
@@ -4670,17 +5227,17 @@ fn main_defaults()
 	list tri_modules = new_list( module );
 	list_add( tri_modules, module, default_module_2d_tri_vert );
 	list_add( tri_modules, module, default_module_2d_tri_frag );
-	default_shader_2d_tri = new_shader( default_form_shader_tri, default_form_frame, tri_modules, null, 0 );
+	default_shader_2d_tri = new_shader( default_form_shader_tri, default_form_frame_depth, tri_modules, null, 0 );
 
 	list tri_tex_modules = new_list( module );
 	list_add( tri_tex_modules, module, default_module_2d_tri_tex_vert );
 	list_add( tri_tex_modules, module, default_module_2d_tri_tex_frag );
-	default_shader_2d_tri_tex = new_shader( default_form_shader_tri_tex, default_form_frame, tri_tex_modules, null, 0 );
+	default_shader_2d_tri_tex = new_shader( default_form_shader_tri_tex, default_form_frame_depth, tri_tex_modules, null, 0 );
 
 	list line_modules = new_list( module );
 	list_add( line_modules, module, default_module_2d_line_vert );
 	list_add( line_modules, module, default_module_2d_line_frag );
-	default_shader_2d_line = new_shader( default_form_shader_line, default_form_frame, line_modules, null, 0 );
+	default_shader_2d_line = new_shader( default_form_shader_line, default_form_frame_depth, line_modules, null, 0 );
 }
 
 fn main_init();
@@ -4688,6 +5245,10 @@ fn main_init();
 fn update_inputs()
 {
 	// engage_spinlock(input_lock);
+
+	main_mouse_wheel_x = 0;
+	main_mouse_wheel_y = 0;
+
 	as( safe_u8_get( input_update_ptr ) > 0 )
 	{
 		safe_u8_dec( input_update_ptr );
@@ -4699,13 +5260,30 @@ fn update_inputs()
 
 inl ptr( pure ) main_thread_loop( in ptr( pure ) in_ptr )
 {
-	main_thread_pacer = new_os_pacer( 120 );
+	main_thread_pacer = new_os_pacer( to_u32(main_fps) );
 	loop
 	{
-		if( safe_flag_get(hept_exit) ) skip;
+		if( safe_flag_get( hept_exit ) ) skip;
 		start_os_pacer( main_thread_pacer );
-		//
 
+
+		once f32 T = 0;
+		//T += 1./main_fps;
+
+		//print_f32(T);
+
+
+		//
+		// if( safe_flag_get( main_thread_ready ) )
+		//{
+		engage_spinlock( main_thread_lock );
+		//
+		mouse_window_prev_x = mouse_window_x;
+		mouse_window_prev_y = mouse_window_y;
+		mouse_window_x = main_mouse_window_x;
+		mouse_window_y = main_mouse_window_y;
+		//
+		//u64 T = get_ns();
 		if( pile_event != null )
 		{
 			event this_event = null;
@@ -4722,10 +5300,14 @@ inl ptr( pure ) main_thread_loop( in ptr( pure ) in_ptr )
 				perform_event( this_event );
 			}
 		}
+		//print( "%d\n", to_u32( 1000. / ( to_f64( get_ns() - T ) / to_f64( nano_per_milli ) ) ) );
 		//
 		update_inputs();
 		//
-		if( safe_flag_get(hept_exit) ) skip;
+		vacate_spinlock( main_thread_lock );
+		//}
+		//
+		if( safe_flag_get( hept_exit ) ) skip;
 		wait_os_pacer( main_thread_pacer );
 	}
 	safe_flag_set( main_thread_exit, yes );
@@ -4734,12 +5316,13 @@ inl ptr( pure ) main_thread_loop( in ptr( pure ) in_ptr )
 
 fn main_loop()
 {
+	engage_spinlock( main_thread_lock );
 	main_thread = new_os_thread( main_thread_loop );
 	loop
 	{
-		if( safe_flag_get(hept_exit) ) out;
+		if( safe_flag_get( hept_exit ) ) out;
 		update_os_windows();
-		if( safe_flag_get(hept_exit) ) out;
+		if( safe_flag_get( hept_exit ) ) out;
 		update_renderers();
 	}
 }
@@ -4747,9 +5330,8 @@ fn main_loop()
 fn main_exit()
 {
 	as( safe_flag_get( main_thread_exit ) == no ) sleep_ns( nano_per_milli );
-	vkDeviceWaitIdle(current_os_machine->device);
-	vkQueueWaitIdle(current_renderer->form->queue);
-	
+	vkDeviceWaitIdle( current_os_machine->device );
+
 	delete_all_shaders();
 	delete_all_shader_inputs();
 	delete_all_modules();
@@ -4783,30 +5365,31 @@ fn main_exit()
 
 //
 
-#if OS_WINDOWS
-inl s32 WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+	#if OS_WINDOWS & COMPILER_MSVC
+int main();
+inl s32 WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
 	out main();
 }
-#endif
+	#endif
 
-	#define main( CREATOR_NAME, APP_NAME, WIDTH, HEIGHT, FN_COMMAND, VSYNC ) \
-		int main()                                                      \
-		{                                                               \
-			main_creator_name = new_text(CREATOR_NAME,0);                           \
-			main_app_name = new_text(APP_NAME,0);                                   \
-			main_width = WIDTH;                                         \
-			main_height = HEIGHT;                                       \
-			main_fn_command = to( fn_ptr( pure, , pure ), FN_COMMAND ); \
-            main_vsync = (VSYNC) ? (H_present_mode_vsync_on) : (H_present_mode_vsync_off);									\
-																		\
-			main_core();                                                \
-			main_defaults();                                            \
-			main_init();                                                \
-			main_loop();                                                \
-			main_exit();                                                \
-			out 0;                                                      \
-		}                                                               \
+	#define main( CREATOR_NAME, APP_NAME, WIDTH, HEIGHT, FN_COMMAND, VSYNC, FPS )            \
+		int main()                                                                             \
+		{                                                                                      \
+			main_creator_name = new_text( CREATOR_NAME, 0 );                                     \
+			main_app_name = new_text( APP_NAME, 0 );                                             \
+			main_width = WIDTH;                                                                  \
+			main_height = HEIGHT;                                                                \
+			main_fn_command = to( fn_ptr( pure, , pure ), FN_COMMAND );                          \
+			main_vsync = ( VSYNC ) ? ( H_present_mode_vsync_on ) : ( H_present_mode_vsync_off ); \
+			main_fps = FPS;                                                                      \
+			main_core();                                                                         \
+			main_defaults();                                                                     \
+			main_init();                                                                         \
+			main_loop();                                                                         \
+			main_exit();                                                                         \
+			out 0;                                                                               \
+		}                                                                                      \
 		fn main_init()
 
 #endif
