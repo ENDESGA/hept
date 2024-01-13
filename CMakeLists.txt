@@ -23,7 +23,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "MSVC")
 else()
   target_compile_options(${PROJECT_NAME} PRIVATE
           "$<$<CONFIG:RELEASE>:-O3;-march=native;-funroll-loops;-fexpensive-optimizations;-finline-functions;-fprefetch-loop-arrays;-ffast-math>"
-          "$<$<CONFIG:DEBUG>:-Og;-g>"
+          "$<$<CONFIG:DEBUG>:-O0;-g>"
   )
 endif()
 
